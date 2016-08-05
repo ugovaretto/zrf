@@ -56,6 +56,9 @@ struct FixedSizeRecvPolicy {
                 if(retry > maxRetries && maxRetries > 0) stop_ = true;
                 continue;
             }
+            //Add decompression and decryption support, decryption will be
+            //supported only through single pub - single sub configuration
+            //with an additional handshake step
             buffer.resize(rc);
             queue.Push(buffer);
             buffer.resize(bufferSize);
@@ -66,6 +69,7 @@ struct FixedSizeRecvPolicy {
 };
 
 
+//! \todo add compression and encrypion policy
 template < typename ExecutionPolicyT = FixedSizeRecvPolicy >
 class RAWInStream : ExecutionPolicyT {
 public:

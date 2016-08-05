@@ -25,12 +25,12 @@ using ByteArray = std::vector<Byte>;
 //RAWOutStream os;
 //os.Send(Pack(3));
 
-struct NoSizeSendPolicy {
-    void Execute(SyncQueue<std::vector<char>> &queue, const char *URI) {
+struct FixedSizeSendPolicy {
+    void Execute(SyncQueue< std::vector< char > > &queue, const char *URI) {
         void *ctx = nullptr;
         void *pub = nullptr;
         std::tie(ctx, pub) = CreateZMQContextAndSocket(URI);
-        while(true) {
+        while(!stopRequested_) {
             const std::vector<char> buffer(queue.Pop());
             if(zmq_send(pub, buffer.data(), buffer.size(), 0) < 0) {
                 throw std::runtime_error("Error sending data - "
@@ -42,9 +42,24 @@ struct NoSizeSendPolicy {
         }
         CleanupZMQResources(ctx, pub);
     }
+    ///stops if the result of serialize_(DataT()) is an empty vector<char>
+    ///@param timeoutSeconds file stop request then wait until timeout before
+    ///       returning
+    bool Stop(int timeoutSeconds = 4) { //sync
+        stopRequested_ = true;
+        const std::future_status fs =
+                taskFuture_.wait_for(std::chrono::seconds(timeoutSeconds));
+        return fs == std::future_status::ready;
+    }
+protected:
+    ~FixedSizeSendPolicy() {
+        Stop();
+    }
+private:
+    bool stopRequested_ = false;
 };
 
-template< typename ExecutionPolicyT = NoSizeSendPolicy >
+template< typename ExecutionPolicyT = FixedSizeSendPolicy >
 class RAWOutStream : ExecutionPolicyT {
 public:
     RAWOutStream() = delete;
@@ -66,19 +81,7 @@ public:
     void Buffer(FwdT begin, FwdT end) {
         queue_.Buffer(begin, end);
     }
-    ///stops if the result of serialize_(DataT()) is an empty vector<char>
-    ///@param timeoutSeconds file stop request then wait until timeout before
-    ///       returning
-    bool Stop(int timeoutSeconds = 4) { //sync
-        queue_.PushFront(DataT());
-        const std::future_status fs =
-                taskFuture_.wait_for(std::chrono::seconds(timeoutSeconds));
-        return fs == std::future_status::ready;
-    }
 
-    ~RAWOutStream() {
-        Stop();
-    }
 private:
     void Start(const char *URI) {
         taskFuture_
@@ -86,7 +89,7 @@ private:
     }
     std::function<void(const char *)> CreateWorker() {
         return [this](const char *URI) {
-            this->Execute(URI);
+            this->Execute(this->queue_, URI);
         };
     }
 

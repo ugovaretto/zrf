@@ -250,7 +250,7 @@ struct GetSerializer< std::tuple< ArgsT... > > {
 template < typename...ArgsT >
 struct GetSerializer< const std::tuple< ArgsT... > > {
     using Type =
-    typename std::conditional< And< std::is_pod< ArgsT >... >::Value,
+    typename std::conditional< detail::And< std::is_pod< ArgsT >... >::Value,
             SerializePOD< std::tuple< ArgsT... > >,
             Serialize< std::tuple< ArgsT... > > >::type;
 };
@@ -259,7 +259,7 @@ struct GetSerializer< const std::tuple< ArgsT... > > {
 template < typename...ArgsT >
 struct GetSerializer< volatile std::tuple< ArgsT... > > {
     using Type =
-    typename std::conditional< And< std::is_pod< ArgsT >... >::Value,
+    typename std::conditional< detail::And< std::is_pod< ArgsT >... >::Value,
             SerializePOD< std::tuple< ArgsT... > >,
             Serialize< std::tuple< ArgsT... > > >::type;
 };
@@ -275,30 +275,28 @@ template < typename T >
 struct GetSerializer< volatile T* >;
 //! @}
 
-//Serializer/DeSerializer adapters to work with RAWI/OStreams
-template < typename T >
-struct SerializerInstance {
-    ByteArray operator()(const T& d, ByteArray ba = ByteArray()) const {
-        return GetSerializer< T >::Type::Pack(d, ba);
-    }
+
+
+
+
+template < typename T, typename...ArgsT >
+ByteArray Pack(const T& h, const ArgsT&...t, ByteArray ) {
+    return Pack(t..., GetSerializer< T >::Type::Pack(h, std::move(h)));
 };
 
-///@todo change after changing RAWInStream deserialization code
-///which requires to explicitly pass a size parameter
-template < typename T >
-struct DeSerializerInstance {
-    T operator()(ConstByteIterator bi, size_t /*size*/ = 0) const {
-        T d;
-        GetSerializer< T >::Type::UnPack(bi, d);
-        return d;
-    }
-};
+//template <>
+//ByteArray Pack<>(ByteArray ba = ByteArray() ) {
+//    return ba;
+//}
 
+//! Serialize data to byte array.
 template < typename T >
-ByteArray Pack(const T& d, ByteArray ba = ByteArray()) {
-    return GetSerializer< T >::Type::Pack(d, ba);
+ByteArray Pack(const T& d, ByteArray ba = ByteArray() ) {
+    return GetSerializer< T >::Type::Pack(d, std::move(ba));
 }
 
+//! Return de-serializes data from byte array iterator
+//! (e.g. \code [const char*]).
 template < typename T >
 typename std::remove_reference<
         typename std::remove_cv< T >::type >::type
@@ -310,11 +308,14 @@ UnPack(ConstByteIterator bi) {
     return d;
 }
 
+//! De-serialize data from byte array iterator (e.g. \code [const char*])
+//! into reference.
 template < typename T >
 ConstByteIterator UnPack(ConstByteIterator bi, T& d) {
     return GetSerializer< T >::Type::UnPack(bi, d);
 }
 
+//! Upack and convert data from byte array.
 template< typename T >
 T To(const ByteArray& ba) {
     return UnPack< T >(begin(ba));

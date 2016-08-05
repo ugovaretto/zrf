@@ -86,6 +86,8 @@ int main(int, char**) {
     const ByteArray vsoutBuf = VSSerializer::Pack(vsout);
     vector< string > vsin;
     VSSerializer::UnPack(begin(vsoutBuf), vsin);
+
+    ByteArray tv = Pack<int, double, float>(1, 2.0, 3.1f);
 #if LOG__
     cout << endl;
     copy(vsin.begin(), vsin.end(), ostream_iterator< string >(cout, "\n"));
