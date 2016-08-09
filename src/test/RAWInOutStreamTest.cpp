@@ -24,6 +24,7 @@ int main(int, char**) {
     int received = 0;
     auto receiver = [&received, NUM_MESSAGES, MESSAGE_SIZE](const char* uri) {
         RAWInStream is(uri, MESSAGE_SIZE);
+        // use uri = "tcp://<hostname or address>:port" to connect
         int count = 0;
         is.Loop([&count, &received, NUM_MESSAGES](const vector< char >& v) {
             if(!v.empty()) {
@@ -44,8 +45,9 @@ int main(int, char**) {
     //start receiver in separate thread
     auto f = async(launch::async, receiver, URI);
 
-    //PUB (send)
+    //PUB (send) - use
     RAWOutStream os(URI);
+    // use uri = "tcp://*:port" to start sending (internally passed to bind)
     std::vector< char > data(MESSAGE_SIZE);
     for(int i = 0; i != NUM_MESSAGES; ++i) {
         memmove(data.data(), &i, sizeof(int));
