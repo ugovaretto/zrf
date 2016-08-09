@@ -356,27 +356,35 @@ std::tuple< H, T... > TupleCons(const H& h, const std::tuple< T... >& t) {
 
 template< typename T, typename...ArgsT >
 struct UnpackTHelper {
-    static std::tuple< T, ArgsT... > Unpack(ConstByteIterator bi) {
+    static std::tuple< T, ArgsT... > Unpack(ConstByteIterator& bi) {
         T d = T();
+        bi = UnPack(bi, d);
         std::tuple< ArgsT... > t =
-            UnpackTHelper< ArgsT... >::Unpack(UnPack(bi, d));
+            UnpackTHelper< ArgsT... >::Unpack(bi);
         return TupleCons(d, t);
     }
 };
 
 template< typename T >
 struct UnpackTHelper< T > {
-    static std::tuple< T > Unpack(ConstByteIterator bi) {
+    static std::tuple< T > Unpack(ConstByteIterator& bi) {
         T d = T();
-        UnPack(bi, d);
+        bi = UnPack(bi, d);
         return std::make_tuple(d);
     }
 };
 }
 
-//! Unpack individual values into tuple
+//! Unpack individual values into tuple: updated iterator
 template< typename...ArgsT >
-std::tuple< ArgsT... > UnPackTuple(ConstByteIterator bi) {
+std::tuple< ArgsT... > UnPackTuple(ConstByteIterator& bi) {
     return detail::UnpackTHelper< ArgsT... >::Unpack(bi);
 }
+
+//! Unpack individual values into tuple: from temporary iterator (e.g. .begin())
+template< typename...ArgsT >
+std::tuple< ArgsT... > UnPackTuple(ConstByteIterator&& bi) {
+    return detail::UnpackTHelper< ArgsT... >::Unpack(bi);
+}
+
 }

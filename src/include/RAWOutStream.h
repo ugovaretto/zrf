@@ -24,9 +24,6 @@ using ByteArray = std::vector< Byte >;
 //RAWOutStream os;
 //os.Send(Pack(3));
 
-//default serializer: data -> vector< char >
-//only POD types (copy with memmove) supported
-
 class RAWOutStream {
 public:
     RAWOutStream() = delete;

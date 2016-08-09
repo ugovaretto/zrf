@@ -93,10 +93,12 @@ int main(int, char**) {
     int first;
     double second;
     float third;
+    vector< char >::const_iterator it = tv.begin();
     tie(first, second, third) =
-        UnPackTuple< int, double, float >(tv.begin());
+        UnPackTuple< int, double, float >(it);
     assert(make_tuple(first, second, third) ==
            make_tuple(1, 2.0, 3.1f));
+    assert(it == tv.cend());
 #if LOG__
     cout << endl;
     copy(vsin.begin(), vsin.end(), ostream_iterator< string >(cout, "\n"));
