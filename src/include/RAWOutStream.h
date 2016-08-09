@@ -7,7 +7,7 @@
 #include <tuple>
 #include <future>
 #include <chrono>
-//#include <cinttypes>
+
 #include <vector>
 #include <cstring> //memmove
 #include <cerrno>
@@ -18,20 +18,57 @@
 #include "SyncQueue.h"
 
 namespace zrf {
-
 using Byte = char;
 using ByteArray = std::vector< Byte >;
 
 //RAWOutStream os;
 //os.Send(Pack(3));
 
-struct FixedSizeSendPolicy {
-    void Execute(SyncQueue< std::vector< char > >& queue, const char* URI) {
-        void* ctx = nullptr;
-        void* pub = nullptr;
+//default serializer: data -> vector< char >
+//only POD types (copy with memmove) supported
+
+class RAWOutStream {
+public:
+    RAWOutStream() = delete;
+    RAWOutStream(const RAWOutStream&) = delete;
+    RAWOutStream(RAWOutStream&&) = default;
+    RAWOutStream(const char*URI) {
+        Start(URI);
+    }
+    void Send(const ByteArray& data) { //async
+        queue_.Push(data);
+    }
+    template< typename FwdT >
+    void Buffer(FwdT begin, FwdT end) {
+        queue_.Buffer(begin, end);
+    }
+    ///@param timeoutSeconds file stop request then wait until timeout before
+    ///       returning
+    bool Stop(int timeoutSeconds = 4) { //sync
+        queue_.PushFront(ByteArray());
+        const std::future_status fs =
+            taskFuture_.wait_for(std::chrono::seconds(timeoutSeconds));
+        return fs == std::future_status::ready;
+    }
+    ~RAWOutStream() {
+        Stop();
+    }
+private:
+    void Start(const char*URI) {
+        taskFuture_
+            = std::async(std::launch::async, CreateWorker(), URI);
+    }
+    std::function< void(const char*) > CreateWorker() {
+        return [this](const char*URI) {
+            this->Execute(URI);
+        };
+    }
+    void Execute(const char*URI) {
+        void*ctx = nullptr;
+        void*pub = nullptr;
         std::tie(ctx, pub) = CreateZMQContextAndSocket(URI);
         while (true) {
-            const std::vector< char > buffer(queue.Pop());
+            ByteArray buffer(queue_.Pop());
             if(zmq_send(pub, buffer.data(), buffer.size(), 0) < 0) {
                 throw std::runtime_error("Error sending data - "
                                              + std::string(strerror(errno)));
@@ -43,60 +80,14 @@ struct FixedSizeSendPolicy {
         }
         CleanupZMQResources(ctx, pub);
     }
-};
-
-template< typename ExecutionPolicyT = FixedSizeSendPolicy >
-class RAWOutStream : ExecutionPolicyT {
-public:
-    RAWOutStream() = delete;
-
-    RAWOutStream(const RAWOutStream&) = delete;
-
-    RAWOutStream(RAWOutStream&&) = default;
-
-    RAWOutStream(const char*URI, const SerializerT& S = SerializerT())
-        : serialize_(S) {
-        Start(URI);
-    }
-
-    void Send(const std::vector< char >& data) { //async
-        queue_.Push(data);
-    }
-
-    template< typename FwdT >
-    void Buffer(FwdT begin, FwdT end) {
-        queue_.Buffer(begin, end);
-    }
-
-    bool Stop(int timeoutSeconds = 4) { //sync
-        queue_.push(std::vector< char >());
-        const std::future_status fs =
-            taskFuture_.wait_for(std::chrono::seconds(timeoutSeconds));
-        return fs == std::future_status::ready;
-    }
-    ~RAWOutStream() {
-        Stop();
-    }
-
 private:
-    void Start(const char*URI) {
-        taskFuture_
-            = std::async(std::launch::async, CreateWorker(), URI);
-    }
-    std::function< void(const char*) > CreateWorker() {
-        return [this](const char* URI) {
-            this->Execute(this->queue_, URI);
-        };
-    }
-
-private:
-    void CleanupZMQResources(void* ctx, void* pub) {
+    void CleanupZMQResources(void*ctx, void*pub) {
         if(pub)
             zmq_close(pub);
         if(ctx)
             zmq_ctx_destroy(ctx);
     }
-    std::tuple< void*, void* > CreateZMQContextAndSocket(const char* URI) {
+    std::tuple< void*, void* > CreateZMQContextAndSocket(const char*URI) {
         void*ctx = nullptr;
         void*pub = nullptr;
         try {
@@ -113,10 +104,10 @@ private:
             CleanupZMQResources(ctx, pub);
             throw e;
         }
+        return std::make_tuple(nullptr, nullptr);
     };
 private:
-    SyncQueue< std::vector< char > > queue_;
+    SyncQueue <ByteArray> queue_;
     std::future< void > taskFuture_;
-    SerializerT serialize_ = SerializerT();
 };
 }
