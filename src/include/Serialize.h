@@ -383,7 +383,7 @@ std::tuple< ArgsT... > UnPackTuple(ConstByteIterator& bi) {
 
 //! Unpack individual values into tuple: from temporary iterator (e.g. .begin())
 template< typename...ArgsT >
-std::tuple< ArgsT... > UnPackTuple(ConstByteIterator&& bi) {
+std::tuple< ArgsT... > UnPackTuple(const ConstByteIterator& bi) {
     return detail::UnpackTHelper< ArgsT... >::Unpack(bi);
 }
 
