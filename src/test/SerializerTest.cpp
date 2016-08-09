@@ -19,6 +19,7 @@
 #include "Serialize.h"
 
 using namespace std;
+using namespace srz;
 
 int main(int, char**) {
     //POD
@@ -87,7 +88,15 @@ int main(int, char**) {
     vector< string > vsin;
     VSSerializer::UnPack(begin(vsoutBuf), vsin);
 
-    ByteArray tv = Pack<int, double, float>(1, 2.0, 3.1f);
+    //Serialize individual elements and read to tuple
+    ByteArray tv = Pack(1, 2.0, 3.1f);
+    int first;
+    double second;
+    float third;
+    tie(first, second, third) =
+        UnPackTuple< int, double, float >(tv.begin());
+    assert(make_tuple(first, second, third) ==
+           make_tuple(1, 2.0, 3.1f));
 #if LOG__
     cout << endl;
     copy(vsin.begin(), vsin.end(), ostream_iterator< string >(cout, "\n"));

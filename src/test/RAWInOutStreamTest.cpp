@@ -27,6 +27,7 @@ int main(int, char**) {
             if(!v.empty()) cout << ++received << endl;
             return !v.empty(); });
     };
+    //start receiver in separate thread
     auto f = async(launch::async, receiver, URI);
 
     //PUB

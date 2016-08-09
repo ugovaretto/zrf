@@ -3,6 +3,7 @@
 //
 #include <iostream>
 #include <cstdlib>
+#include <tuple>
 
 using namespace std;
 
@@ -11,7 +12,9 @@ void Foo(const T& t, const ArgsT&...args, int i = 1) {
     cout << i << endl;
 };
 
+
 int main(int, char**) {
+    std::tuple<> t;
     Foo<double, float, int>(1.,2.f,3);
     return EXIT_SUCCESS;
 }

@@ -56,9 +56,6 @@ struct FixedSizeRecvPolicy {
                 if(retry > maxRetries && maxRetries > 0) stop_ = true;
                 continue;
             }
-            //Add decompression and decryption support, decryption will be
-            //supported only through single pub - single sub configuration
-            //with an additional handshake step
             buffer.resize(rc);
             queue.Push(buffer);
             buffer.resize(bufferSize);
@@ -147,8 +144,8 @@ private:
         return std::make_tuple(nullptr, nullptr);
     };
 private:
-    SyncQueue<std::vector<char> > queue_;
-    std::future<void> taskFuture_;
+    SyncQueue< std::vector< char > > queue_;
+    std::future< void > taskFuture_;
     bool stop_ = false;
 };
 }
