@@ -52,8 +52,29 @@
 #include "Serialize.h"
 
 
+//ServiceManager:
+// - store individual services
+// - create service instance on client request, futher communication
+//   happens directly between client and service instance
+//
+//Service:
+// - store individual MethodImpl objects as method implementations
+// - each method is associated to a method id
+//
+//MethodImpl:
+// - wrapper for method implementation, value semantics:
+//   - dispatches calls to wrapped object
+//   - holds objects derived from IMethod
+//
+//IMethod: interface for method implementation
+//
+//Method: utility class derived from IMethod that automatically converts
+//        between ByteArrays and typed arguments
+
+
+
 //==============================================================================
-//DRIVER
+//Test
 //==============================================================================
 using namespace std;
 using namespace zrf;
