@@ -19,13 +19,15 @@
 //! \endcode
 //!
 //! The preferred way of serializing/deserializing data is through the
-//! \c Pack and \c UnPack functions. \sa Pack, UnPack.
+//! \c Pack, \c UnPack and \c UnPackTuple functions.
+//! \sa Pack, UnPack, UnPackTuple
 
 #pragma once
 #include <vector>
 #include <string>
 #include <type_traits>
 
+//! Serialization framework
 namespace srz {
 #ifdef ZRF_uint8_t
 #include <cinttypes>
@@ -43,6 +45,8 @@ struct GetSerializer;
 
 //Serializer definitions
 
+//! \defgroup Serializers
+//! @{
 //! Serialize POD data/
 //! Use \c memmove to copy data into buffer.
 template< typename T >
@@ -169,9 +173,11 @@ struct SerializeString {
         return bi;
     }
 };
+//! @}
 
-// GetSerializer
-
+//! \defgroup \code [Serializer selection]
+//! Return proper specialization from type.
+//! @{
 //! Select serializer for \code [std::vector< T >] type, also removing
 //! \c cv qualifiers.
 template< typename T >
@@ -275,19 +281,22 @@ struct GetSerializer< const T* >;
 template< typename T >
 struct GetSerializer< volatile T* >;
 //! @}
+//! @}
 
-//! Serialize void specialization
+
+//! \defgroup Packing/Unpacking
+//! Serialize data to byte array: void specialization.
 ByteArray Pack(ByteArray ba) {
     return ba;
 }
 
-//! Serialize data to byte array
+//! Serialize data to byte array.
 template< typename T, typename... ArgsT >
 ByteArray Pack(ByteArray ba, const T& h, const ArgsT&... t) {
     return Pack(GetSerializer< T >::Type::Pack(h, std::move(ba)), t...);
 };
 
-//! Serialize data into newly created byte array
+//! Serialize data into newly created byte array.
 template< typename... ArgsT >
 ByteArray Pack(const ArgsT&... t) {
     return Pack(ByteArray(), t...);
@@ -304,6 +313,8 @@ template< typename T, typename... ArgsT >
 ByteIterator Pack(ByteIterator bi, const T& h, const ArgsT&... t) {
     return Pack(GetSerializer< T >::Type::Pack(h, bi), t...);
 };
+
+//! \todo add Pack(ByteArray&,...)
 
 
 //! Return de-serialized data from byte array iterator
@@ -332,16 +343,25 @@ T To(const ByteArray& ba) {
     return UnPack< T >(begin(ba));
 }
 
+//! Private namespace for
 namespace detail {
+
+//! Index sequence; use it to access elements at compile time
+//! e.g. \code [foo(std::get< Is >(mytuple)...);]
 template< size_t... > struct Seq {};
+
+//! Index sequence generator; termination condition
 template< size_t M, size_t... Ints >
 struct GenSeq : GenSeq< M - 1, M - 1, Ints... > {};
-
+//! Index sequence generator.
 template< size_t... Ints >
 struct GenSeq< 0, Ints... > {
     using Type = Seq< Ints... >;
 };
 
+//! Construct new tuple instance from new head element and other tuple, use
+//! compile time index sequence to expand parameter pack into \code[make_tuple]
+//! invocation.
 template< typename H, typename... T, size_t... Is >
 std::tuple< H, T... > TupleConsHelper(const H& h,
                                       const std::tuple< T... >& t,
@@ -349,11 +369,13 @@ std::tuple< H, T... > TupleConsHelper(const H& h,
     return std::make_tuple(h, std::get< Is >(t)...);
 }
 
+//! Construct new tuple by addind head element to other tuple.
 template< typename H, typename...T >
 std::tuple< H, T... > TupleCons(const H& h, const std::tuple< T... >& t) {
     return TupleConsHelper(h, t, typename GenSeq< sizeof...(T) >::Type());
 };
 
+//! Helper for unpacking element into tuple.
 template< typename T, typename...ArgsT >
 struct UnpackTHelper {
     static std::tuple< T, ArgsT... > Unpack(ConstByteIterator& bi) {
@@ -365,6 +387,7 @@ struct UnpackTHelper {
     }
 };
 
+//! Helper for unpacking element into tuple: termination specialization.
 template< typename T >
 struct UnpackTHelper< T > {
     static std::tuple< T > Unpack(ConstByteIterator& bi) {
