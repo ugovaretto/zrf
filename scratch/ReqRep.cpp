@@ -16,16 +16,20 @@
 #include "RAWInStream.h"
 #include "Serialize.h"
 
-using ReqId = int64_t;
+namespace zrf {
+using ReqId = u_int64_t;
 
 class ServiceClient;
 
 class Response {
 public:
+    Response() = delete;
+    Response(const Response&) = delete;
+    Response(Response&&) = default;
+    Response& operator=(const Response&) = delete;
     Response(ServiceClient& sc, ReqId rid, std::future< ByteArray >&& rf)
         : sc_(sc), rid_(rid), repFuture_(std::move(rf));
     ByteArray Get() const;
-    operator ByteArray() const;
 private:
     mutable ServiceClient& sc_;
     ReqId id_;
@@ -33,7 +37,7 @@ private:
 };
 
 ReqId NewReqId() {
-    static thread_local ReqId rid = ReqiId(0); //thread_local implies static
+    static thread_local ReqId rid = ReqiId(1); //thread_local implies static
     return ++rid;
 }
 
@@ -67,16 +71,17 @@ public:
     Response Send(const ByteArray& req,
                   ReqId rid = NewReqID(),
                   bool expectReply = true) {
-        static bool first = true;
+        static thread_local bool first = true; //thread_local implies static
         ByteArray nb
         if(first) {
             nb = Pack(localURI_, rid, req);
-        } else nb Pack(rid, req);
-        promise< ByteArray > p;
-        future< ByteArray > f = p.get_future();
+            first = false;
+        } else nb = Pack(rid, req);
+        std::promise< ByteArray > p;
+        std::future< ByteArray > f = p.get_future();
         std::lock_guard< std::mutex > lg(waitListMutex_);
         waitlist_[rid] = std::move(p);
-        return f;
+        return Response(*this, rid, std::move(f));
     }
 private:
     std::string localURI_;
@@ -95,12 +100,6 @@ ByteArray Response::Get() const {
     sc_.Remove(rid_);
     return rep;
 }
-
-Response::operator ByteArray() const {
-    return Get();
-}
-};
-
 
 
 template < typename SF, typename EH >
@@ -144,22 +143,14 @@ private:
 };
 
 
-
-
-future< ByteArray > Request(const ByteArray& req) {
-    REQID rid = NewReqID();
-    ByteArray nb = Pack(rid, req);
-    promise< ByteArray > p;
-    future< ByteArray > f = p.get_future();
-    scoped_lock< >
-    waitlist[rid] = move(p);
-    return f;
 }
 
-auto onReceive = [this](const ByteArray& rep) {
+int main(int, char**) {
+    const char* URI = "ipc://reqrep";
+    ServiceProvider sc(0x1000, URI, URI);
 
-    scopedlock
-    promis
-    waitlist[rid].set_value(ByteArray(bi, rep.end()));
-};
 
+
+
+    return EXIT_SUCCESS;
+}
