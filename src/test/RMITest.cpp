@@ -54,7 +54,7 @@
 
 //ServiceManager:
 // - store individual services
-// - create service instance on client request, futher communication
+// - create service instance on client request, further communication
 //   happens directly between client and service instance
 //
 //Service:
