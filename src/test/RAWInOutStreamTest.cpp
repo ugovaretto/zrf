@@ -13,6 +13,9 @@
 
 using namespace std;
 using namespace zrf;
+
+using RawOStream = RAWOutStream<>; //use default (no size info sent) send policy
+
 int main(int, char**) {
     //ipc and tcp do work inproc does not!
     const char* URI = "ipc://outstream";
@@ -46,7 +49,7 @@ int main(int, char**) {
     auto f = async(launch::async, receiver, URI);
 
     //PUB (send) - use
-    RAWOutStream os(URI);
+    RawOStream os(URI);
     // use uri = "tcp://*:port" to start sending (internally passed to bind)
     std::vector< char > data(MESSAGE_SIZE);
     for(int i = 0; i != NUM_MESSAGES; ++i) {

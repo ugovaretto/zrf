@@ -314,8 +314,20 @@ ByteIterator Pack(ByteIterator bi, const T& h, const ArgsT&... t) {
     return Pack(GetSerializer< T >::Type::Pack(h, bi), t...);
 };
 
-//! \todo add Pack(ByteArray&,...)
 
+//! Serialize data to byte array in place, termination condition
+size_t Pack(ByteArray&) {
+    return 0;
+}
+
+//! Serialize data to byte array in place
+template< typename T, typename... ArgsT >
+size_t Pack(ByteArray& ba, const T& h, const ArgsT&... t) {
+    const size_t sz = ba.size();
+    ba.resize(sz + sizeof(T));
+    GetSerializer< T >::Type::Pack(h, ba.begin() + sz);
+    return sizeof(T) + Pack(ba, t...);
+};
 
 //! Return de-serialized data from byte array iterator
 //! (e.g. \code [const char*]).

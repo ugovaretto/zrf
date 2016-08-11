@@ -16,16 +16,33 @@
 #include <zmq.h>
 
 #include "SyncQueue.h"
+#include "utility.h"
 
 namespace zrf {
 using Byte = char;
 using ByteArray = std::vector< Byte >;
 
-//RAWOutStream os;
+//RAWOutStream<> os("tcp://*:4444");
 //os.Send(Pack(3));
 
-class RAWOutStream {
+struct NoSizeInfoSendPolicy {
+    static void SendBuffer(void* sock, const ByteArray& buffer) {
+        ZCheck(zmq_send(sock, buffer.data(), buffer.size(), 0));
+    }
+};
+
+struct SizeInfoSendPolicy {
+    static void SendBuffer(void* sock, const ByteArray& buffer) {
+        ZCheck(zmq_send(sock, buffer.data(), buffer.size(), ZMQ_SNDMORE));
+        ZCheck(zmq_send(sock, buffer.data(), buffer.size(), 0));
+    }
+};
+
+
+template < typename SendPolicyT = NoSizeInfoSendPolicy >
+class RAWOutStream : SendPolicyT {
 public:
+    using SendPolicy = SendPolicyT;
     RAWOutStream() = delete;
     RAWOutStream(const RAWOutStream&) = delete;
     RAWOutStream(RAWOutStream&&) = default;
@@ -35,6 +52,11 @@ public:
     void Send(const ByteArray& data) { //async
         queue_.Push(data);
     }
+//this adds a dependency on Serializer
+//    template < typename...ArgsT >
+//    void Send(const ArgsT&...args) {
+//        Send(srz::Pack(args));
+//    }
     template< typename FwdT >
     void Buffer(FwdT begin, FwdT end) {
         queue_.Buffer(begin, end);
@@ -61,15 +83,12 @@ private:
         };
     }
     void Execute(const char*URI) {
-        void*ctx = nullptr;
-        void*pub = nullptr;
+        void* ctx = nullptr;
+        void* pub = nullptr;
         std::tie(ctx, pub) = CreateZMQContextAndSocket(URI);
-        while (true) {
+        while(true) {
             ByteArray buffer(queue_.Pop());
-            if(zmq_send(pub, buffer.data(), buffer.size(), 0) < 0) {
-                throw std::runtime_error("Error sending data - "
-                                             + std::string(strerror(errno)));
-            }
+            SendPolicy::SendBuffer(pub, buffer);
             //an empty message ends the loop and notifies the other endpoint
             //about the end of stream condition
             if(buffer.empty())
@@ -85,8 +104,8 @@ private:
             zmq_ctx_destroy(ctx);
     }
     std::tuple< void*, void* > CreateZMQContextAndSocket(const char*URI) {
-        void*ctx = nullptr;
-        void*pub = nullptr;
+        void* ctx = nullptr;
+        void* pub = nullptr;
         try {
             ctx = zmq_ctx_new();
             if(!ctx)

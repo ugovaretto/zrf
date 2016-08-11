@@ -18,7 +18,7 @@
 
 //usage
 // const char* subscribeURL = "tcp://localhost:5556";
-// RAWInstream is;
+// RAWInstream<> is("tcp://localhost:4444", 0x1000);
 // auto handleData = [](int i) { cout << i << endl; };
 // int inactivityTimeoutInSec = 10; //optional, not currently supported
 // //blocking call, will stop at the reception of an empty message
@@ -28,12 +28,36 @@ namespace zrf {
 
 using ByteArray = std::vector< char >;
 
+
+struct NoSizeInfoReceivePolicy {
+    static void ReceiveBuffer(void* sock, ByteArray& buffer) {
+        ZCheck(zmq_recv(sock, buffer.data(), buffer.size(), 0));
+    }
+};
+
+struct SizeInfoReceivePolicy {
+    static void ReceiveBuffer(void* sock, ByteArray& buffer) {
+        size_t sz;
+        ZCheck(zmq_recv(sock, &sz, sizeof(sz)), 0);
+        int64_t more = 0;
+        size_t moreSize = sizeof(more);
+        ZCheck(zmq_getsockopt(serviceSocket_, ZMQ_RCVMORE, &more, &moreSize));
+        if(!more)
+            throw std::logic_error(
+                "Wrong packet format: "
+                "Receive policy requires <size, data> packet format");
+        buffer.resize(sz);
+        ZCheck(zmq_recv(sock, buffer.data(), buffer.size(), 0));
+    }
+};
+
+template < typename ReceivePolicyT = NoSizeInfoReceivePolicy >
 class RAWInStream {
 public:
     RAWInStream() = delete;
     RAWInStream(const RAWInStream&) = delete;
     RAWInStream(RAWInStream&&) = default;
-    RAWInStream(const char*URI, int buffersize = 0x100000,
+    RAWInStream(const char* URI, int buffersize = 0x100000,
                 int timeout = -1)
         : stop_(false) {
         Start(URI, buffersize, timeout);

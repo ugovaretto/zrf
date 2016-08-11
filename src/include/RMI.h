@@ -81,6 +81,8 @@ struct RemoveAll {
 //==============================================================================
 //METHOD
 //==============================================================================
+//! \defgroup method
+//! Method:
 struct IMethod {
     virtual ByteArray Invoke(const ByteArray& args) = 0;
     virtual IMethod* Clone() const = 0;
@@ -338,17 +340,18 @@ public:
                     ZCheck(zmq_send(r, 0, 0, ZMQ_SNDMORE));
                     ZCheck(zmq_send(r, &rep[0], rep.size(), 0));
                 } else {
-                    //we need to get a reference to the service in order
-                    //not to access the map from a separate thread
                     Service& service = this->services_[serviceName];
                     auto executeService = [](Service* pservice) {
                         pservice->Start();
                     };
-                    auto f = std::async(std::launch::async,
-                                        executeService,
-                                        &service);
-                    Log("server>> Started service at " + service.GetURI());
-                    serviceFutures_[serviceName] = std::move(f);
+                    //single shared instance
+                    if(service.GetStatus() == Service::STOPPED) {
+                        auto f = std::async(std::launch::async,
+                                            executeService,
+                                            &service);
+                        Log("server>> Started service at " + service.GetURI());
+                        serviceFutures_[serviceName] = std::move(f);
+                    }
                     ByteArray rep = srz::Pack(service.GetURI());
                     ZCheck(zmq_send(r, &id[0], size_t(irc), ZMQ_SNDMORE));
                     ZCheck(zmq_send(r, 0, 0, ZMQ_SNDMORE));
