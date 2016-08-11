@@ -33,7 +33,8 @@ struct NoSizeInfoSendPolicy {
 
 struct SizeInfoSendPolicy {
     static void SendBuffer(void* sock, const ByteArray& buffer) {
-        ZCheck(zmq_send(sock, buffer.data(), buffer.size(), ZMQ_SNDMORE));
+        const size_t sz = buffer.size();
+        ZCheck(zmq_send(sock, &sz, sizeof(sz), ZMQ_SNDMORE));
         ZCheck(zmq_send(sock, buffer.data(), buffer.size(), 0));
     }
 };

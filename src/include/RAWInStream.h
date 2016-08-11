@@ -14,6 +14,7 @@
 #include <zmq.h>
 
 #include "SyncQueue.h"
+#include "utility.h"
 
 
 //usage
@@ -30,30 +31,39 @@ using ByteArray = std::vector< char >;
 
 
 struct NoSizeInfoReceivePolicy {
-    static void ReceiveBuffer(void* sock, ByteArray& buffer) {
-        ZCheck(zmq_recv(sock, buffer.data(), buffer.size(), 0));
+    static const bool RESIZE_BUFFER = false;
+    static bool ReceiveBuffer(void* sock, ByteArray& buffer, bool block) {
+        const int b = block ? 0 : ZMQ_NOBLOCK;
+        const int rc = zmq_recv(sock, buffer.data(), buffer.size(), 0);
+        if(rc < 0) return false;
+        buffer.resize(rc);
+        return true;
     }
 };
 
 struct SizeInfoReceivePolicy {
-    static void ReceiveBuffer(void* sock, ByteArray& buffer) {
+    static const bool RESIZE_BUFFER = true;
+    static bool ReceiveBuffer(void* sock, ByteArray& buffer, bool block) {
+        const int b = block ? 0 : ZMQ_NOBLOCK;
         size_t sz;
-        ZCheck(zmq_recv(sock, &sz, sizeof(sz)), 0);
+        if(zmq_recv(sock, &sz, sizeof(sz), b) < 0) return false;
         int64_t more = 0;
         size_t moreSize = sizeof(more);
-        ZCheck(zmq_getsockopt(serviceSocket_, ZMQ_RCVMORE, &more, &moreSize));
+        ZCheck(zmq_getsockopt(sock, ZMQ_RCVMORE, &more, &moreSize));
         if(!more)
             throw std::logic_error(
                 "Wrong packet format: "
                 "Receive policy requires <size, data> packet format");
         buffer.resize(sz);
         ZCheck(zmq_recv(sock, buffer.data(), buffer.size(), 0));
+        return true;
     }
 };
 
 template < typename ReceivePolicyT = NoSizeInfoReceivePolicy >
 class RAWInStream {
 public:
+    using ReceivePolicy = ReceivePolicyT;
     RAWInStream() = delete;
     RAWInStream(const RAWInStream&) = delete;
     RAWInStream(RAWInStream&&) = default;
@@ -96,8 +106,8 @@ private:
     void Execute(const char*URI,
                  int bufferSize = 0x100000,
                  int timeoutInSeconds = -1) { //sync
-        void*ctx = nullptr;
-        void*sub = nullptr;
+        void* ctx = nullptr;
+        void* sub = nullptr;
         std::tie(ctx, sub) = CreateZMQContextAndSocket(URI);
         std::vector< char > buffer(bufferSize);
         const std::chrono::microseconds delay(500);
@@ -106,21 +116,19 @@ private:
                 / std::chrono::duration_cast< std::chrono::seconds >(delay)
                     .count() : 0;
         int retry = 0;
+        const bool blockOption = false;
         while (!stop_) {
-            const int rc
-                = zmq_recv(sub, buffer.data(), buffer.size(), ZMQ_NOBLOCK);
-            if(rc < 0) {
+            if(!ReceivePolicy::ReceiveBuffer(sub, buffer, blockOption)) {
                 std::this_thread::sleep_for(delay);
                 ++retry;
                 if(retry > maxRetries && maxRetries > 0)
                     stop_ = true;
                 continue;
             }
-            buffer.resize(rc);
             queue_.Push(buffer);
-            buffer.resize(bufferSize);
-            if(rc == 0)
+            if(buffer.empty())
                 break;// should we exit when data is empty ?
+            if(!ReceivePolicy::RESIZE_BUFFER) buffer.resize(bufferSize);
         }
     }
 private:
@@ -131,8 +139,8 @@ private:
             zmq_ctx_destroy(ctx);
     }
     std::tuple< void*, void* > CreateZMQContextAndSocket(const char*URI) {
-        void*ctx = nullptr;
-        void*sub = nullptr;
+        void* ctx = nullptr;
+        void* sub = nullptr;
         try {
             ctx = zmq_ctx_new();
             if(!ctx)

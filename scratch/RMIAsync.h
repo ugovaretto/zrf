@@ -1,4 +1,4 @@
-//
+///
 // Created by Ugo Varetto on 8/10/16.
 //
 
@@ -445,17 +445,7 @@ public:
         recvBuf_(0x1000) {
         Connect(GetServiceURI(serviceManagerURI, serviceName));
     }
-    RemoteInvoker operator[](int id) {
-        return RemoteInvoker(this, id);
-    }
-    template < typename R, typename...ArgsT >
-    R Request(int reqid, ArgsT...args) {
-        sendBuf_.resize(0);
-        sendBuf_ = srz::Pack(std::make_tuple(args...), std::move(sendBuf_));
-        Send(reqid);
-        return srz::UnPack< R >(begin(recvBuf_));
 
-    };
     ~ServiceProxy() {
         ZCleanup(ctx_, serviceSocket_);
     }
@@ -513,6 +503,7 @@ private:
     ByteArray recvBuf_;
     void* ctx_;
     void* serviceSocket_;
+    std::map< ReqId, std::promise
 };
 
 }

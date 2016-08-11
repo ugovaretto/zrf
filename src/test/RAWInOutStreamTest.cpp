@@ -14,7 +14,15 @@
 using namespace std;
 using namespace zrf;
 
+#define SEND_MESSAGE_SIZE
+#ifdef SEND_MESSAGE_SIZE
+using RawOStream = RAWOutStream< SizeInfoSendPolicy >; //use default (no size info sent) send policy
+using RawIStream = RAWInStream< SizeInfoReceivePolicy>;  //use default no size info received policy
+
+#else
 using RawOStream = RAWOutStream<>; //use default (no size info sent) send policy
+using RawIStream = RAWInStream<>;  //use default no size info received policy
+#endif
 
 int main(int, char**) {
     //ipc and tcp do work inproc does not!
@@ -26,7 +34,7 @@ int main(int, char**) {
     //SUB (receive)
     int received = 0;
     auto receiver = [&received, NUM_MESSAGES, MESSAGE_SIZE](const char* uri) {
-        RAWInStream is(uri, MESSAGE_SIZE);
+        RawIStream is(uri, MESSAGE_SIZE);
         // use uri = "tcp://<hostname or address>:port" to connect
         int count = 0;
         is.Loop([&count, &received, NUM_MESSAGES](const vector< char >& v) {
