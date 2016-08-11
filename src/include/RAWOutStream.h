@@ -17,6 +17,7 @@
 
 #include "SyncQueue.h"
 #include "utility.h"
+#include "Serialize.h"
 
 namespace zrf {
 using Byte = char;
@@ -44,7 +45,8 @@ template < typename SendPolicyT = NoSizeInfoSendPolicy >
 class RAWOutStream : SendPolicyT {
 public:
     using SendPolicy = SendPolicyT;
-    RAWOutStream() = delete;
+    enum Status {STARTED, STOPPED};
+    RAWOutStream() : status_(STOPPED) {}
     RAWOutStream(const RAWOutStream&) = delete;
     RAWOutStream(RAWOutStream&&) = default;
     RAWOutStream(const char*URI) {
@@ -53,11 +55,10 @@ public:
     void Send(const ByteArray& data) { //async
         queue_.Push(data);
     }
-//this adds a dependency on Serializer
-//    template < typename...ArgsT >
-//    void Send(const ArgsT&...args) {
-//        Send(srz::Pack(args));
-//    }
+    template < typename...ArgsT >
+    void SendArgs(const ArgsT&...args) {
+        Send(srz::Pack(args...));
+    }
     template< typename FwdT >
     void Buffer(FwdT begin, FwdT end) {
         queue_.Buffer(begin, end);
@@ -70,14 +71,22 @@ public:
             taskFuture_.wait_for(std::chrono::seconds(timeoutSeconds));
         return fs == std::future_status::ready;
     }
+    bool Started() const {
+        return status_ == STARTED;
+    }
+    void Start(const char* URI) {
+        if(Started()) {
+            if(!Stop(5)) {
+                throw std::runtime_error("Cannot restart");
+            }
+        }
+        taskFuture_
+            = std::async(std::launch::async, CreateWorker(), URI);
+    }
     ~RAWOutStream() {
         Stop();
     }
 private:
-    void Start(const char*URI) {
-        taskFuture_
-            = std::async(std::launch::async, CreateWorker(), URI);
-    }
     std::function< void(const char*) > CreateWorker() {
         return [this](const char*URI) {
             this->Execute(URI);
@@ -87,6 +96,7 @@ private:
         void* ctx = nullptr;
         void* pub = nullptr;
         std::tie(ctx, pub) = CreateZMQContextAndSocket(URI);
+        status_ = STARTED;
         while(true) {
             ByteArray buffer(queue_.Pop());
             SendPolicy::SendBuffer(pub, buffer);
@@ -96,6 +106,7 @@ private:
                 break;
         }
         CleanupZMQResources(ctx, pub);
+        status_ = STOPPED;
     }
 private:
     void CleanupZMQResources(void*ctx, void*pub) {
@@ -126,5 +137,6 @@ private:
 private:
     SyncQueue <ByteArray> queue_;
     std::future< void > taskFuture_;
+    Status status_;
 };
 }

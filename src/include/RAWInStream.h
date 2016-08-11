@@ -14,6 +14,7 @@
 #include <zmq.h>
 
 #include "SyncQueue.h"
+#include "Serialize.h"
 #include "utility.h"
 
 
@@ -63,18 +64,27 @@ struct SizeInfoReceivePolicy {
 template < typename ReceivePolicyT = NoSizeInfoReceivePolicy >
 class RAWInStream {
 public:
+    enum Status {STARTED, STOPPED};
     using ReceivePolicy = ReceivePolicyT;
-    RAWInStream() = delete;
+    RAWInStream() : stop_(false), status_(STOPPED) {}
     RAWInStream(const RAWInStream&) = delete;
     RAWInStream(RAWInStream&&) = default;
     RAWInStream(const char* URI, int buffersize = 0x100000,
                 int timeout = -1)
-        : stop_(false) {
+        : stop_(false), status_(STOPPED) {
         Start(URI, buffersize, timeout);
     }
     void Stop() { //call from separate thread
         stop_ = true;
     }
+    template < typename CallbackT, typename...ArgsT >
+    void LoopArgs(const CallbackT& cback) {
+        while(!stop_) {
+            ByteArray buf(queue_.Pop());
+            std::tuple< ArgsT... > args = srz::UnPackTuple< ArgsT... >(buf);
+            return CallF(cback, args);
+        }
+    };
     template< typename CallbackT >
     void Loop(const CallbackT& cback) { //sync
         while (!stop_) {
@@ -83,18 +93,25 @@ public:
         }
         taskFuture_.get();
     }
-    ~RAWInStream() {
+    bool Started() const {
+        return status_ == STARTED;
+    }
+     ~RAWInStream() {
         Stop();
     }
-private:
     void Start(const char*URI,
                int bufsize,
                int inactivityTimeout) { //async
+        if(Started()) {
+            Stop();
+            taskFuture_.get();
+        }
         taskFuture_
             = std::async(std::launch::async,
                          CreateWorker(), URI,
                          bufsize, inactivityTimeout);
     }
+private:
     std::function< void(const char*, int, int) >
     CreateWorker() {
         return [this](const char*URI,
@@ -117,6 +134,7 @@ private:
                     .count() : 0;
         int retry = 0;
         const bool blockOption = false;
+        status_ = STARTED;
         while (!stop_) {
             if(!ReceivePolicy::ReceiveBuffer(sub, buffer, blockOption)) {
                 std::this_thread::sleep_for(delay);
@@ -128,11 +146,14 @@ private:
             queue_.Push(buffer);
             if(buffer.empty())
                 break;// should we exit when data is empty ?
-            if(!ReceivePolicy::RESIZE_BUFFER) buffer.resize(bufferSize);
+            if(!ReceivePolicy::RESIZE_BUFFER)
+                buffer.resize(bufferSize);
         }
+        CleanupZMQResources(ctx, sub);
+        status_ = STOPPED;
     }
 private:
-    void CleanupZMQResources(void*ctx, void*sub) {
+    void CleanupZMQResources(void* ctx, void* sub) {
         if(sub)
             zmq_close(sub);
         if(ctx)
@@ -164,5 +185,6 @@ private:
     SyncQueue< ByteArray > queue_;
     std::future< void > taskFuture_;
     bool stop_ = false;
+    Status status_;
 };
 }
