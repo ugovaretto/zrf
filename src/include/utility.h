@@ -73,8 +73,8 @@ R CallFHelper(const F& f,
 
 template< typename R, typename F, int...Ints, typename...ArgsT >
 R CallF(const F& f,
-       std::tuple< ArgsT... > args) {
-    return CallHelper(f, args,
+        std::tuple< ArgsT... > args) {
+    return CallHelper< R >(f, args,
                       typename MakeIndexSequence< sizeof...(ArgsT) >::Type());
 };
 

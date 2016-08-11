@@ -82,7 +82,7 @@ public:
         while(!stop_) {
             ByteArray buf(queue_.Pop());
             std::tuple< ArgsT... > args = srz::UnPackTuple< ArgsT... >(buf);
-            return CallF(cback, args);
+            return CallF< bool >(cback, args);
         }
     };
     template< typename CallbackT >
