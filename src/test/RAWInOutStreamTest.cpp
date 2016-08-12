@@ -14,7 +14,8 @@
 using namespace std;
 using namespace zrf;
 
-#define SEND_MESSAGE_SIZE
+//send message size along messages
+//#define SEND_MESSAGE_SIZE
 #ifdef SEND_MESSAGE_SIZE
 using RawOStream = RAWOutStream< SizeInfoSendPolicy >; //use default (no size info sent) send policy
 using RawIStream = RAWInStream< SizeInfoReceivePolicy>;  //use default no size info received policy

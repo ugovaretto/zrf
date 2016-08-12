@@ -99,9 +99,9 @@ public:
      ~RAWInStream() {
         Stop();
     }
-    void Start(const char*URI,
-               int bufsize,
-               int inactivityTimeout) { //async
+    void Start(const char* URI,
+               int bufsize = 0x10000,
+               int inactivityTimeout = -1) { //async
         if(Started()) {
             Stop();
             taskFuture_.get();
