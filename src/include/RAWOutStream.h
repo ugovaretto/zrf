@@ -19,9 +19,12 @@
 #include "utility.h"
 #include "Serialize.h"
 
+//Xlib confict
+#ifdef Status
+#undef Status
+#endif
+
 namespace zrf {
-using Byte = char;
-using ByteArray = std::vector< Byte >;
 
 //RAWOutStream<> os("tcp://*:4444");
 //os.Send(Pack(3));
@@ -49,7 +52,7 @@ public:
     RAWOutStream() : status_(STOPPED) {}
     RAWOutStream(const RAWOutStream&) = delete;
     RAWOutStream(RAWOutStream&&) = default;
-    RAWOutStream(const char*URI) {
+    RAWOutStream(const char* URI) {
         Start(URI);
     }
     void Send(const ByteArray& data) { //async
@@ -57,7 +60,7 @@ public:
     }
     template < typename...ArgsT >
     void SendArgs(const ArgsT&...args) {
-        Send(srz::Pack(args...));
+        Send(srz::PackArgs(args...));
     }
     template< typename FwdT >
     void Buffer(FwdT begin, FwdT end) {
@@ -87,7 +90,7 @@ public:
         Stop();
     }
 private:
-    std::function< void(const char*) > CreateWorker() {
+    std::function< void (const char*) > CreateWorker() {
         return [this](const char*URI) {
             this->Execute(URI);
         };

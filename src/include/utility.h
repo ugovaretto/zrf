@@ -8,38 +8,13 @@
 
 namespace zrf {
 
-namespace {
-
-void Log(const std::string& msg) {
-#ifdef LOG__
-    std::cout << msg << std::endl;
-#endif
-}
-
-int ZCheck(int ret) {
-    if(ret < 0)
-        throw std::runtime_error(strerror(errno));
-    return ret;
-}
-
-template< typename T >
-T* ZCheck(T* ptr) {
-    if(!ptr)
-        throw std::runtime_error("NULL pointer");
-    return ptr;
-}
-
-void ZCleanup(void* context, void* zmqsocket) {
-    ZCheck(zmq_close(zmqsocket));
-    ZCheck(zmq_ctx_destroy(context));
-}
-
-}
+using Byte = char;
+using ByteArray = std::vector< Byte >;
 
 //------------------------------------------------------------------------------
 //Template Meta Programming
 
-//note: index sequence and call are available in c++14 and 17
+//note: index sequence is available since C++14, call since C++17
 
 template< int... > struct IndexSequence {};
 template< int M, int... Ints >
@@ -99,4 +74,34 @@ struct RemoveAll {
     using Type = typename std::remove_cv<
         typename std::remove_reference< T >::type >::type;
 };
+
+namespace {
+
+void Log(const std::string& msg) {
+#ifdef LOG__
+    std::cout << msg << std::endl;
+#endif
+}
+
+int ZCheck(int ret) {
+    if(ret < 0)
+        throw std::runtime_error(strerror(errno));
+    return ret;
+}
+
+template< typename T >
+T* ZCheck(T* ptr) {
+    if(!ptr)
+        throw std::runtime_error("NULL pointer");
+    return ptr;
+}
+
+void ZCleanup(void* context, void* zmqsocket) {
+    ZCheck(zmq_close(zmqsocket));
+    ZCheck(zmq_ctx_destroy(context));
+}
+
+}
+
+
 }

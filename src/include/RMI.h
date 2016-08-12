@@ -20,6 +20,11 @@
 #include "SyncQueue.h"
 #include "utility.h"
 
+//Xlib confict
+#ifdef Status
+#undef Status
+#endif
+
 namespace zrf {
 using ByteArray = srz::ByteArray;
 

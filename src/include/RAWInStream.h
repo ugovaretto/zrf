@@ -18,6 +18,11 @@
 #include "utility.h"
 
 
+//Xlib confict
+#ifdef Status
+#undef Status
+#endif
+
 //usage
 // const char* subscribeURL = "tcp://localhost:5556";
 // RAWInstream<> is("tcp://localhost:4444", 0x1000);
@@ -27,8 +32,6 @@
 // is.Start(subscribeURL, handleData, inactivityTimeoutInSec);
 
 namespace zrf {
-
-using ByteArray = std::vector< char >;
 
 
 struct NoSizeInfoReceivePolicy {
@@ -69,13 +72,18 @@ public:
     RAWInStream() : stop_(false), status_(STOPPED) {}
     RAWInStream(const RAWInStream&) = delete;
     RAWInStream(RAWInStream&&) = default;
-    RAWInStream(const char* URI, int buffersize = 0x100000,
+    RAWInStream(const char* URI,
+                int buffersize = 0x100000,
+                int delayus = 200,
                 int timeout = -1)
-        : stop_(false), status_(STOPPED) {
+        : connectionInfo_(std::string(URI), buffersize, delayus, timeout),
+          stop_(false), status_(STOPPED) {
         Start(URI, buffersize, timeout);
     }
     void Stop() { //call from separate thread
         stop_ = true;
+        taskFuture_.get();
+        status_ = STOPPED;
     }
     template < typename CallbackT, typename...ArgsT >
     void LoopArgs(const CallbackT& cback) {
@@ -101,7 +109,11 @@ public:
     }
     void Start(const char* URI,
                int bufsize = 0x10000,
+               int delayus = 200,
                int inactivityTimeout = -1) { //async
+        connectionInfo_ =
+            std::make_tuple(std::string(URI), bufsize,
+                            delayus, inactivityTimeout);
         if(Started()) {
             Stop();
             taskFuture_.get();
@@ -109,25 +121,35 @@ public:
         taskFuture_
             = std::async(std::launch::async,
                          CreateWorker(), URI,
-                         bufsize, inactivityTimeout);
+                         bufsize, delayus, inactivityTimeout);
+    }
+    void Restart() {
+        Stop();
+        using std::get;
+        Start(get< URI >(connectionInfo_).c_str(),
+              get< BUFSIZE >(connectionInfo_),
+              get< DELAY >(connectionInfo_),
+              get< TIMEOUT >(connectionInfo_));
     }
 private:
-    std::function< void(const char*, int, int) >
+    std::function< void(const char*, int, int, int) >
     CreateWorker() {
         return [this](const char*URI,
                       int bufsize,
+                      int delayus,
                       int inactivityTimeoutInSec) {
-            this->Execute(URI, bufsize, inactivityTimeoutInSec);
+            this->Execute(URI, bufsize, delayus, inactivityTimeoutInSec);
         };
     }
-    void Execute(const char*URI,
-                 int bufferSize = 0x100000,
-                 int timeoutInSeconds = -1) { //sync
+    void Execute(const char* URI,
+                 int bufferSize ,
+                 int delayus,
+                 int timeoutInSeconds) { //sync
         void* ctx = nullptr;
         void* sub = nullptr;
         std::tie(ctx, sub) = CreateZMQContextAndSocket(URI);
         std::vector< char > buffer(bufferSize);
-        const std::chrono::microseconds delay(500);
+        const std::chrono::microseconds delay(delayus);
         const int maxRetries
             = timeoutInSeconds > 0 ? timeoutInSeconds
                 / std::chrono::duration_cast< std::chrono::seconds >(delay)
@@ -135,13 +157,15 @@ private:
         int retry = 0;
         const bool blockOption = false;
         status_ = STARTED;
+        bool restart = false;
         while (!stop_) {
             if(!ReceivePolicy::ReceiveBuffer(sub, buffer, blockOption)) {
                 std::this_thread::sleep_for(delay);
                 ++retry;
-                if(retry > maxRetries && maxRetries > 0)
-                    stop_ = true;
-                continue;
+                if(retry > maxRetries && maxRetries > 0) {
+                    restart = true;
+                    break;
+                }
             }
             queue_.Push(buffer);
             if(buffer.empty())
@@ -151,6 +175,7 @@ private:
         }
         CleanupZMQResources(ctx, sub);
         status_ = STOPPED;
+        if(restart) Restart();
     }
 private:
     void CleanupZMQResources(void* ctx, void* sub) {
@@ -182,9 +207,11 @@ private:
         return std::make_tuple(nullptr, nullptr);
     };
 private:
+    enum {URI = 0, BUFSIZE = 1, DELAY = 2, TIMEOUT = 3};
     SyncQueue< ByteArray > queue_;
     std::future< void > taskFuture_;
     bool stop_ = false;
     Status status_;
+    std::tuple< std::string, int, int, int > connectionInfo_;
 };
 }

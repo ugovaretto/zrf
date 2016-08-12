@@ -329,6 +329,12 @@ size_t Pack(ByteArray& ba, const T& h, const ArgsT&... t) {
     return sizeof(T) + Pack(ba, t...);
 };
 
+template< typename... ArgsT >
+ByteArray PackArgs(ArgsT...args) {
+    return Pack(ByteArray(), args...);
+};
+
+
 //! Return de-serialized data from byte array iterator
 //! (e.g. \code [const char*]).
 template< typename T >

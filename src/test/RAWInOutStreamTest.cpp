@@ -62,8 +62,10 @@ int main(int, char**) {
     // use uri = "tcp://*:port" to start sending (internally passed to bind)
     std::vector< char > data(MESSAGE_SIZE);
     for(int i = 0; i != NUM_MESSAGES; ++i) {
-        memmove(data.data(), &i, sizeof(int));
-        os.Send(data);
+        if(i % 2) {
+            memmove(data.data(), &i, sizeof(int));
+            os.Send(data);
+        } else os.SendArgs(i);
         using namespace chrono;
         this_thread::sleep_for(duration_cast< nanoseconds >(milliseconds(200)));
     }

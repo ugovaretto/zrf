@@ -50,6 +50,12 @@ public:
         queue_.pop_front();
         return e;
     }
+    //! Empty ?
+    bool Empty() const {
+        std::lock_guard< std::mutex > lg(mutex_);
+        const bool e = queue_.empty();
+        return e;
+    }
 private:
     std::deque<T> queue_;
     std::mutex mutex_;
