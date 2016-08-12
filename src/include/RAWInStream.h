@@ -38,7 +38,7 @@ struct NoSizeInfoReceivePolicy {
     static const bool RESIZE_BUFFER = false;
     static bool ReceiveBuffer(void* sock, ByteArray& buffer, bool block) {
         const int b = block ? 0 : ZMQ_NOBLOCK;
-        const int rc = zmq_recv(sock, buffer.data(), buffer.size(), 0);
+        const int rc = zmq_recv(sock, buffer.data(), buffer.size(), b);
         if(rc < 0) return false;
         buffer.resize(rc);
         return true;
@@ -99,7 +99,6 @@ public:
             if(!cback(queue_.Pop()))
                 break;
         }
-        taskFuture_.get();
     }
     bool Started() const {
         return status_ == STARTED;
@@ -155,7 +154,7 @@ private:
                 / std::chrono::duration_cast< std::chrono::seconds >(delay)
                     .count() : 0;
         int retry = 0;
-        const bool blockOption = false;
+        const bool blockOption = true;
         status_ = STARTED;
         bool restart = false;
         while (!stop_) {
@@ -164,8 +163,9 @@ private:
                 ++retry;
                 if(retry > maxRetries && maxRetries > 0) {
                     restart = true;
-                    break;
+                    stop_ = true;
                 }
+                continue;
             }
             queue_.Push(buffer);
             if(buffer.empty())

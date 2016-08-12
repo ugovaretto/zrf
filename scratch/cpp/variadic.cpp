@@ -5,6 +5,7 @@
 #include <cstdlib>
 #include <tuple>
 #include <future>
+#include <algorithm>
 
 using namespace std;
 
@@ -32,7 +33,10 @@ void foo(int i = NewID()) {
 }
 
 
-int main(int, char**) {\
+int main(int argc, char** argv) {
+    bool sub = find_if(argv, argv + argc, [](char* s){
+        return std::string(s) == "-sub";}) != argv + argc;
+    cout << boolalpha << sub << endl;
     auto f = Get();
     cout << f.get() << endl;
     std::tuple<> t;

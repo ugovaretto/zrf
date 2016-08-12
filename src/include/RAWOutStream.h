@@ -52,7 +52,7 @@ public:
     RAWOutStream() : status_(STOPPED) {}
     RAWOutStream(const RAWOutStream&) = delete;
     RAWOutStream(RAWOutStream&&) = default;
-    RAWOutStream(const char* URI) {
+    RAWOutStream(const char* URI) : status_(STOPPED) {
         Start(URI);
     }
     void Send(const ByteArray& data) { //async

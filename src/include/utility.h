@@ -77,9 +77,10 @@ struct RemoveAll {
 
 namespace {
 
-void Log(const std::string& msg) {
+template < typename T >
+void Log(const T& v) {
 #ifdef LOG__
-    std::cout << msg << std::endl;
+    std::cout << v << std::endl;
 #endif
 }
 
