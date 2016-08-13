@@ -15,6 +15,8 @@
 #include <cerrno>
 #include <string>
 #include <map>
+#include <atomic>
+#include <memory>
 
 #include <zmq.h>
 
@@ -50,6 +52,7 @@ struct SizeInfoTransmissionPolicy {
         ZCheck(zmq_send(sock, &sz, sizeof(sz), ZMQ_SNDMORE));
         ZCheck(zmq_send(sock, buffer.data(), buffer.size(), 0));
     }
+    static const bool RESIZE_BUFFER = true;
     static bool ReceiveBuffer(void* sock, ByteArray& buffer, bool block) {
         const int b = block ? 0 : ZMQ_NOBLOCK;
         size_t sz;
@@ -67,63 +70,76 @@ struct SizeInfoTransmissionPolicy {
     }
 };
 
+using ReqId = int;
 
-class Client;
-
-class Response {
+template < typename AT >
+class Reply {
 public:
-    Response() = delete;
-    Response(const Response&) = delete;
-    Response(Response&&) = default;
-    Response& operator=(const Response&) = delete;
-    Response(Client& sc, ReqId rid, std::future< ByteArray >&& rf)
-        : sc_(sc), rid_(rid), repFuture_(std::move(rf));
+    Reply() = delete;
+    Reply(const Reply&) = delete;
+    Reply(Reply&&) = default;
+    Reply& operator=(const Reply&) = delete;
+    Reply(AT& sc, ReqId rid, std::future< ByteArray >&& rf);
     ByteArray Get() const;
+    template < typename T >
+    operator T() const {
+        return srz::UnPack< T >(Get());
+    }
 private:
-    mutable Client& sc_;
-    ReqId id_;
-    std::future< ByteArray > repFuture_;
+    AT& sc_;
+    ReqId rid_;
+    mutable std::future< ByteArray > repFuture_;
 };
 
 ReqId NewReqId() {
-    static thread_local ReqId rid = ReqiId(1); //thread_local implies static
-    return ++rid;
+    static std::atomic< ReqId > rid(ReqId(1));
+    ++rid;
+    return rid;
 }
 
 template < typename TransmissionPolicyT = NoSizeInfoTransmissionPolicy >
-class Client : TransmissionPolicyT {
+class AsyncClient : TransmissionPolicyT {
 public:
     using TransmissionPolicy = TransmissionPolicyT;
+    using ReplyType = Reply< AsyncClient< TransmissionPolicy > >;
     enum Status {STARTED, STOPPED};
-    Client() : status_(STOPPED) {}
-    Client(const Client&) = delete;
-    Client(Client&&) = default;
-    Client(const char* URI) : status_(STOPPED) {
+    AsyncClient() : status_(STOPPED), stop_(false) {}
+    AsyncClient(const AsyncClient&) = delete;
+    AsyncClient(AsyncClient&&) = default;
+    AsyncClient(const char* URI) : status_(STOPPED), stop_(false) {
         Start(URI);
     }
-    Response Send(const ByteArray& req,
-                  ReqId rid = NewReqID(),
-                  bool expectReply = true) {
-        ByteArray nb
-        nb = Pack(rid, req);
+    Reply< AsyncClient< TransmissionPolicy > >
+    Send(const ByteArray& req,
+         ReqId rid = NewReqId(),
+         bool expectReply = true) {
+        ByteArray nb;
+        nb = srz::Pack(rid, req);
         //put promise in waitlist
         std::promise< ByteArray > p;
+            //new std::promise< ByteArray >);
         std::future< ByteArray > f = p.get_future();
         std::lock_guard< std::mutex > lg(waitListMutex_);
         waitList_[rid] = std::move(p);
         requestQueue_.Push(nb);
-        return Response(*this, rid, std::move(f));
+        return Reply< AsyncClient< TransmissionPolicy > >
+               (*this, rid, std::move(f));
     }
 
     ///@param timeoutSeconds file stop request then wait until timeout before
     ///       returning
     bool Stop(int timeoutSeconds = 4) { //sync
-        requestQueue_.PushFront(ByteArray());
+        stop_ = true;
         const std::future_status fs =
             taskFuture_.wait_for(std::chrono::seconds(timeoutSeconds));
-        for(auto i: waiList_)
-            i->second.set_value(ByteArray()); //or should we set an exception ?
-        return fs == std::future_status::ready;
+        const bool ok = fs == std::future_status::ready;
+        using M = std::map< ReqId, std::promise< ByteArray > >;
+        if(ok)
+            for(M::iterator i = waitList_.begin();
+                i != waitList_.end();
+                ++i)
+                i->second.set_value(ByteArray()); //or should we set an exception ?
+        return ok;
     }
     bool Started() const {
         return status_ == STARTED;
@@ -137,11 +153,11 @@ public:
         taskFuture_
             = std::async(std::launch::async, CreateWorker(), URI);
     }
-    ~RAWOutStream() {
+    ~AsyncClient() {
         Stop();
     }
 private:
-    friend class Response;
+    friend class Reply< AsyncClient< TransmissionPolicy > >;
     void Remove(ReqId rid) {
         std::lock_guard< std::mutex > lg(waitListMutex_);
         if(waitList_.find(rid) == waitList_.end())
@@ -149,7 +165,7 @@ private:
         waitList_.erase(rid);
     }
     std::function< void (const char*) > CreateWorker() {
-        return [this](const char*URI) {
+        return [this](const char* URI) {
             this->Execute(URI);
         };
     }
@@ -159,22 +175,20 @@ private:
         std::tie(ctx, s) = CreateZMQContextAndSocket(URI);
         status_ = STARTED;
         zmq_pollitem_t items[] = { { s, 0, ZMQ_POLLIN, 0 } };
-        while(true) {
+        ByteArray recvBuffer(0x1000);
+        while(!stop_) {
             ZCheck(zmq_poll(items, 1, 10)); //poll with 100ms timeout
             if(items[0].revents & ZMQ_POLLIN) {
                 //const int irc = ZCheck(zmq_recv(s, &id[0], id.size(), 0));
                 //ZCheck(zmq_recv(s, 0, 0, 0));
-                TransmissionPolicy::Receive(s, buffer);
-                auto di = UnPackTuple< ReqId, ByteArray >(buffer);
-                waitList_[std::get< 0 >(id)].set_value(std::get< 1 >(di));
+                const bool blockOption = true;
+                TransmissionPolicy::ReceiveBuffer(s, recvBuffer, blockOption);
+                auto di = srz::UnPackTuple< ReqId, ByteArray >(recvBuffer);
+                waitList_[std::get< 0 >(di)].set_value(std::get< 1 >(di));
             }
-            if(queue_.Empty()) continue;
-            ByteArray buffer(queue_.Pop());
+            if(requestQueue_.Empty()) continue;
+            ByteArray buffer(requestQueue_.Pop());
             TransmissionPolicy::SendBuffer(s, buffer);
-            //an empty message ends the loop and notifies the other endpoint
-            //about the end of stream condition
-            if(buffer.empty())
-                break;
         }
         CleanupZMQResources(ctx, s);
         status_ = STOPPED;
@@ -200,7 +214,7 @@ private:
                 throw std::runtime_error("Cannot connect ZMQ socket");
             return std::make_tuple(ctx, s);
         } catch (const std::exception& e) {
-            CleanupZMQResources(ctx, pub);
+            CleanupZMQResources(ctx, s);
             throw e;
         }
         return std::make_tuple(nullptr, nullptr);
@@ -211,12 +225,15 @@ private:
     std::mutex waitListMutex_;
     std::future< void > taskFuture_;
     Status status_;
+    bool stop_;
 };
 
-Response::Response(Client& sc, ReqId rid, std::future< ByteArray >&& rf)
+template < typename AT >
+Reply< AT >::Reply(AT& sc, ReqId rid, std::future< ByteArray >&& rf)
     : sc_(sc), rid_(rid), repFuture_(std::move(rf)) {}
 
-ByteArray Response::Get() const {
+template < typename AT >
+ByteArray Reply< AT >::Get() const {
     ByteArray rep = repFuture_.get();
     sc_.Remove(rid_);
     return rep;

@@ -355,6 +355,14 @@ ConstByteIterator UnPack(ConstByteIterator bi, T& d) {
     return GetSerializer< T >::Type::UnPack(bi, d);
 }
 
+//! De-serialize data from byte array.
+template< typename T >
+T UnPack(const ByteArray& ba) {
+    T d;
+    UnPack(ba.begin(), d);
+    return d;
+}
+
 //! Upack and convert data from byte array.
 template< typename T >
 T To(const ByteArray& ba) {
@@ -425,6 +433,14 @@ std::tuple< ArgsT... > UnPackTuple(ConstByteIterator& bi) {
 //! Unpack individual values into tuple: from temporary iterator (e.g. .begin())
 template< typename...ArgsT >
 std::tuple< ArgsT... > UnPackTuple(const ConstByteIterator& bi) {
+    return detail::UnpackTHelper< ArgsT... >::Unpack(bi);
+}
+
+
+//! Unpack individual values into tuple: from temporary iterator (e.g. .begin())
+template< typename...ArgsT >
+std::tuple< ArgsT... > UnPackTuple(const ByteArray& ba) {
+    ConstByteIterator bi = ba.begin();
     return detail::UnpackTHelper< ArgsT... >::Unpack(bi);
 }
 
