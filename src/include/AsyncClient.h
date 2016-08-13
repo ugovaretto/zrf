@@ -111,20 +111,28 @@ public:
     }
     Reply< AsyncClient< TransmissionPolicy > >
     Send(const ByteArray& req,
-         ReqId rid = NewReqId(),
+         ReqId rid = ReqId(),
          bool expectReply = true) {
         ByteArray nb;
         nb = srz::Pack(rid, req);
         //put promise in waitlist
         std::promise< ByteArray > p;
-            //new std::promise< ByteArray >);
         std::future< ByteArray > f = p.get_future();
+        using R = Reply< AsyncClient< TransmissionPolicy > >;
+        if(!expectReply) {
+            p.set_value(ByteArray());
+            return R(*this, ReqId(), std::move(f));
+        }
+        if(rid == ReqId()) rid = NewReqId();
         std::lock_guard< std::mutex > lg(waitListMutex_);
         waitList_[rid] = std::move(p);
         requestQueue_.Push(nb);
         return Reply< AsyncClient< TransmissionPolicy > >
                (*this, rid, std::move(f));
     }
+//    template < typename...ArgsT >
+//    Reply< AsyncClient< TransmissionPolicy > >
+//    SendArgs()
 
     ///@param timeoutSeconds file stop request then wait until timeout before
     ///       returning
@@ -159,9 +167,13 @@ public:
 private:
     friend class Reply< AsyncClient< TransmissionPolicy > >;
     void Remove(ReqId rid) {
+        //in case of requests not needing a reply this function is
+        //invoked a default constructed ReqId
+        if(rid == ReqId()) return;
         std::lock_guard< std::mutex > lg(waitListMutex_);
-        if(waitList_.find(rid) == waitList_.end())
-            throw std::logic_error("Request not in wait list");
+        if(waitList_.find(rid) != waitList_.end())
+            throw std::logic_error("Request id " + std::to_string(rid) +
+                                   "not found");
         waitList_.erase(rid);
     }
     std::function< void (const char*) > CreateWorker() {

@@ -379,7 +379,6 @@ private:
         }
         const ByteArrayWrapper operator()() {
             sp_->sendBuf_.resize(0);
-            sp_->sendBuf_.resize(0);
             sp_->Send(reqid_);
             return ByteArrayWrapper(sp_->recvBuf_);
         }
