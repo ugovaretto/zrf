@@ -104,7 +104,6 @@ public:
     Response Send(const ByteArray& req,
                   ReqId rid = NewReqID(),
                   bool expectReply = true) {
-        static thread_local bool first = true; //thread_local implies static
         ByteArray nb
         nb = Pack(rid, req);
         //put promise in waitlist

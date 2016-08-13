@@ -59,6 +59,7 @@ int main(int argc, char** argv) {
                 }
                 return !v.empty();
             });
+            assert(count > 0); //at least one mon-empty message received
             cout << "PASSED" << endl;
         } else {
             //PUB (send)
@@ -74,6 +75,8 @@ int main(int argc, char** argv) {
                 this_thread::sleep_for(
                     duration_cast< nanoseconds >(milliseconds(100)));
             }
+            //termination message
+            os.Send(ByteArray());
             os.Stop();
         }
     } catch(const std::exception& e) {

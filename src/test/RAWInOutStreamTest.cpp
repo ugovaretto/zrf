@@ -51,23 +51,29 @@ int main(int, char**) {
                 ++count;
             }
             return !v.empty(); });
+        assert(count > 0); //at least one mon-empty message received
         cout << "PASSED" << endl;
     };
     //start receiver in separate thread
-    auto f = async(launch::async, receiver, URI);
+    auto recvFuture = async(launch::async, receiver, URI);
 
     //PUB (send)
     RawOStream os(URI);
     std::vector< char > data(MESSAGE_SIZE);
-    for(int i = 0; i != NUM_MESSAGES; ++i) {
+    for (int i = 0; i != NUM_MESSAGES; ++i) {
         if(i % 2) {
             memmove(data.data(), &i, sizeof(int));
             os.Send(data);
-        } else os.SendArgs(i);
+        } else
+            os.SendArgs(i);
         using namespace chrono;
-        this_thread::sleep_for(duration_cast< nanoseconds >(milliseconds(200)));
+        this_thread::sleep_for(
+            duration_cast< nanoseconds >(milliseconds(100)));
     }
+    //termination message
+    os.Send(ByteArray());
     os.Stop();
-    f.wait();
+
+    recvFuture.wait();
     return EXIT_SUCCESS;
 }

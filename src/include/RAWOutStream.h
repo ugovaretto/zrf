@@ -43,23 +43,22 @@ struct SizeInfoSendPolicy {
     }
 };
 
-
-template < typename SendPolicyT = NoSizeInfoSendPolicy >
+template< typename SendPolicyT = NoSizeInfoSendPolicy >
 class RAWOutStream : SendPolicyT {
 public:
     using SendPolicy = SendPolicyT;
-    enum Status {STARTED, STOPPED};
-    RAWOutStream() : status_(STOPPED) {}
+    enum Status { STARTED, STOPPED };
+    RAWOutStream() : status_(STOPPED), stop_(false) {}
     RAWOutStream(const RAWOutStream&) = delete;
     RAWOutStream(RAWOutStream&&) = default;
-    RAWOutStream(const char* URI) : status_(STOPPED) {
+    RAWOutStream(const char* URI) : status_(STOPPED), stop_(false) {
         Start(URI);
     }
     void Send(const ByteArray& data) { //async
         queue_.Push(data);
     }
-    template < typename...ArgsT >
-    void SendArgs(const ArgsT&...args) {
+    template< typename...ArgsT >
+    void SendArgs(const ArgsT& ...args) {
         Send(srz::PackArgs(args...));
     }
     template< typename FwdT >
@@ -69,7 +68,7 @@ public:
     ///@param timeoutSeconds file stop request then wait until timeout before
     ///       returning
     bool Stop(int timeoutSeconds = 4) { //sync
-        queue_.PushFront(ByteArray());
+        stop_ = true;
         const std::future_status fs =
             taskFuture_.wait_for(std::chrono::seconds(timeoutSeconds));
         return fs == std::future_status::ready;
@@ -90,35 +89,32 @@ public:
         Stop();
     }
 private:
-    std::function< void (const char*) > CreateWorker() {
-        return [this](const char*URI) {
+    std::function< void(const char*) > CreateWorker() {
+        return [this](const char* URI) {
             this->Execute(URI);
         };
     }
-    void Execute(const char*URI) {
+    void Execute(const char* URI) {
         void* ctx = nullptr;
         void* pub = nullptr;
         std::tie(ctx, pub) = CreateZMQContextAndSocket(URI);
         status_ = STARTED;
-        while(true) {
+        while(!stop_) {
+            if(queue_.Empty()) continue;
             ByteArray buffer(queue_.Pop());
             SendPolicy::SendBuffer(pub, buffer);
-            //an empty message ends the loop and notifies the other endpoint
-            //about the end of stream condition
-            if(buffer.empty())
-                break;
         }
         CleanupZMQResources(ctx, pub);
         status_ = STOPPED;
     }
 private:
-    void CleanupZMQResources(void*ctx, void*pub) {
+    void CleanupZMQResources(void* ctx, void* pub) {
         if(pub)
             zmq_close(pub);
         if(ctx)
             zmq_ctx_destroy(ctx);
     }
-    std::tuple< void*, void* > CreateZMQContextAndSocket(const char*URI) {
+    std::tuple< void*, void* > CreateZMQContextAndSocket(const char* URI) {
         void* ctx = nullptr;
         void* pub = nullptr;
         try {
@@ -131,15 +127,16 @@ private:
             if(zmq_bind(pub, URI))
                 throw std::runtime_error("Cannot bind ZMQ socket");
             return std::make_tuple(ctx, pub);
-        } catch (const std::exception& e) {
+        } catch(const std::exception& e) {
             CleanupZMQResources(ctx, pub);
             throw e;
         }
         return std::make_tuple(nullptr, nullptr);
     };
 private:
-    SyncQueue <ByteArray> queue_;
+    SyncQueue< ByteArray > queue_;
     std::future< void > taskFuture_;
     Status status_;
+    bool stop_;
 };
 }

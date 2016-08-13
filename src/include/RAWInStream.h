@@ -157,7 +157,7 @@ private:
         const bool blockOption = true;
         status_ = STARTED;
         bool restart = false;
-        while (!stop_) {
+        while(!stop_) {
             if(!ReceivePolicy::ReceiveBuffer(sub, buffer, blockOption)) {
                 std::this_thread::sleep_for(delay);
                 ++retry;
@@ -168,8 +168,6 @@ private:
                 continue;
             }
             queue_.Push(buffer);
-            if(buffer.empty())
-                break;// should we exit when data is empty ?
             if(!ReceivePolicy::RESIZE_BUFFER)
                 buffer.resize(bufferSize);
         }
