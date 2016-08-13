@@ -1,5 +1,4 @@
 #pragma once
-//! \warning IN PROGRESS...
 
 //
 // Created by Ugo Varetto on 6/29/16.
@@ -31,47 +30,6 @@
 
 namespace zrf {
 
-
-struct NoSizeInfoTransmissionPolicy {
-    static void SendBuffer(void* sock, const ByteArray& buffer) {
-        ZCheck(zmq_send(sock, buffer.data(), buffer.size(), 0));
-    }
-    static const bool RESIZE_BUFFER = false;
-    static bool ReceiveBuffer(void* sock, ByteArray& buffer, bool block) {
-        const int b = block ? 0 : ZMQ_NOBLOCK;
-        const int rc = zmq_recv(sock, buffer.data(), buffer.size(), 0);
-        if(rc < 0) return false;
-        buffer.resize(rc);
-        return true;
-    }
-};
-
-struct SizeInfoTransmissionPolicy {
-    static void SendBuffer(void* sock, const ByteArray& buffer) {
-        const size_t sz = buffer.size();
-        ZCheck(zmq_send(sock, &sz, sizeof(sz), ZMQ_SNDMORE));
-        ZCheck(zmq_send(sock, buffer.data(), buffer.size(), 0));
-    }
-    static const bool RESIZE_BUFFER = true;
-    static bool ReceiveBuffer(void* sock, ByteArray& buffer, bool block) {
-        const int b = block ? 0 : ZMQ_NOBLOCK;
-        size_t sz;
-        if(zmq_recv(sock, &sz, sizeof(sz), b) < 0) return false;
-        int64_t more = 0;
-        size_t moreSize = sizeof(more);
-        ZCheck(zmq_getsockopt(sock, ZMQ_RCVMORE, &more, &moreSize));
-        if(!more)
-            throw std::logic_error(
-                "Wrong packet format: "
-                    "Receive policy requires <size, data> packet format");
-        buffer.resize(sz);
-        ZCheck(zmq_recv(sock, buffer.data(), buffer.size(), 0));
-        return true;
-    }
-};
-
-using ReqId = int;
-
 template < typename AT >
 class Reply {
 public:
@@ -92,7 +50,7 @@ private:
 };
 
 ReqId NewReqId() {
-    static std::atomic< ReqId > rid(ReqId(1));
+    static std::atomic< ReqId > rid(ReqId(0));
     ++rid;
     return rid;
 }
@@ -109,26 +67,23 @@ public:
     AsyncClient(const char* URI) : status_(STOPPED), stop_(false) {
         Start(URI);
     }
-    Reply< AsyncClient< TransmissionPolicy > >
+    ReplyType
     Send(const ByteArray& req,
          ReqId rid = ReqId(),
          bool expectReply = true) {
         ByteArray nb;
+        rid = rid == ReqId() ? NewReqId() :  rid;
         nb = srz::Pack(rid, req);
         //put promise in waitlist
         std::promise< ByteArray > p;
-        std::future< ByteArray > f = p.get_future();
-        using R = Reply< AsyncClient< TransmissionPolicy > >;
         if(!expectReply) {
             p.set_value(ByteArray());
-            return R(*this, ReqId(), std::move(f));
+            return ReplyType(*this, ReqId(), std::move(p.get_future()));
         }
-        if(rid == ReqId()) rid = NewReqId();
         std::lock_guard< std::mutex > lg(waitListMutex_);
         waitList_[rid] = std::move(p);
         requestQueue_.Push(nb);
-        return Reply< AsyncClient< TransmissionPolicy > >
-               (*this, rid, std::move(f));
+        return ReplyType(*this, rid, std::move(waitList_[rid].get_future()));
     }
 //    template < typename...ArgsT >
 //    Reply< AsyncClient< TransmissionPolicy > >
@@ -171,9 +126,9 @@ private:
         //invoked a default constructed ReqId
         if(rid == ReqId()) return;
         std::lock_guard< std::mutex > lg(waitListMutex_);
-        if(waitList_.find(rid) != waitList_.end())
+        if(waitList_.find(rid) == waitList_.end())
             throw std::logic_error("Request id " + std::to_string(rid) +
-                                   "not found");
+                                   " not found");
         waitList_.erase(rid);
     }
     std::function< void (const char*) > CreateWorker() {
@@ -181,6 +136,10 @@ private:
             this->Execute(URI);
         };
     }
+
+    //Envelope received from router:
+    //| 0 bytes|
+    //| message bytes|
     void Execute(const char* URI) {
         void* ctx = nullptr;
         void* s = nullptr;
@@ -189,10 +148,9 @@ private:
         zmq_pollitem_t items[] = { { s, 0, ZMQ_POLLIN, 0 } };
         ByteArray recvBuffer(0x1000);
         while(!stop_) {
-            ZCheck(zmq_poll(items, 1, 10)); //poll with 100ms timeout
+            ZCheck(zmq_poll(items, 1, 100)); //poll with 100ms timeout
             if(items[0].revents & ZMQ_POLLIN) {
-                //const int irc = ZCheck(zmq_recv(s, &id[0], id.size(), 0));
-                //ZCheck(zmq_recv(s, 0, 0, 0));
+                ZCheck(zmq_recv(s, 0, 0, 0));
                 const bool blockOption = true;
                 TransmissionPolicy::ReceiveBuffer(s, recvBuffer, blockOption);
                 auto di = srz::UnPackTuple< ReqId, ByteArray >(recvBuffer);

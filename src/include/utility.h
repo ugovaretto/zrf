@@ -77,10 +77,15 @@ struct RemoveAll {
 
 namespace {
 
-template < typename T >
-void Log(const T& v) {
+void Log() {
+    std::cout << std::endl;
+}
+
+template < typename T, typename...ArgsT >
+void Log(const T& v, const ArgsT&...args) {
 #ifdef LOG__
-    std::cout << v << std::endl;
+    std::cout << v << ' ';
+    Log(args...);
 #endif
 }
 
@@ -104,5 +109,44 @@ void ZCleanup(void* context, void* zmqsocket) {
 
 }
 
+struct NoSizeInfoTransmissionPolicy {
+    static void SendBuffer(void* sock, const ByteArray& buffer) {
+        ZCheck(zmq_send(sock, buffer.data(), buffer.size(), 0));
+    }
+    static const bool RESIZE_BUFFER = false;
+    static bool ReceiveBuffer(void* sock, ByteArray& buffer, bool block) {
+        const int b = block ? 0 : ZMQ_NOBLOCK;
+        const int rc = zmq_recv(sock, buffer.data(), buffer.size(), b);
+        if(rc < 0) return false;
+        buffer.resize(rc);
+        return true;
+    }
+};
+
+struct SizeInfoTransmissionPolicy {
+    static void SendBuffer(void* sock, const ByteArray& buffer) {
+        const size_t sz = buffer.size();
+        ZCheck(zmq_send(sock, &sz, sizeof(sz), ZMQ_SNDMORE));
+        ZCheck(zmq_send(sock, buffer.data(), buffer.size(), 0));
+    }
+    static const bool RESIZE_BUFFER = true;
+    static bool ReceiveBuffer(void* sock, ByteArray& buffer, bool block) {
+        const int b = block ? 0 : ZMQ_NOBLOCK;
+        size_t sz;
+        if(zmq_recv(sock, &sz, sizeof(sz), b) < 0) return false;
+        int64_t more = 0;
+        size_t moreSize = sizeof(more);
+        ZCheck(zmq_getsockopt(sock, ZMQ_RCVMORE, &more, &moreSize));
+        if(!more)
+            throw std::logic_error(
+                "Wrong packet format: "
+                    "Receive policy requires <size, data> packet format");
+        buffer.resize(sz);
+        ZCheck(zmq_recv(sock, buffer.data(), buffer.size(), b));
+        return true;
+    }
+};
+
+using ReqId = int;
 
 }
