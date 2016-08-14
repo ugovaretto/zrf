@@ -47,23 +47,33 @@ public:
     ///       returning
     bool Stop(int timeoutSeconds = 4) { //sync
         stop_ = true;
-        const std::future_status fs =
-            taskFuture_.wait_for(std::chrono::seconds(timeoutSeconds));
-        const bool ok = fs == std::future_status::ready;
+        std::vector< std::future_status > status;
+        using It = std::vector< std::future< void > >::iterator;
+        for(It f = taskFutures_.begin(); f != taskFutures_.end(); ++f)
+            status.push_back(
+                f->wait_for(std::chrono::seconds(timeoutSeconds)));
+        bool ok = true;
+        for(decltype(status)::iterator s = status.begin();
+            s != status.end();
+            ++s)
+            ok = ok && *s == std::future_status::ready;
         return ok;
     }
     bool Started() const {
         return status_ == STARTED;
     }
     template < typename ServiceT >
-    void Start(const char* URI, const ServiceT& s) {
+    void Start(const char* URI, const ServiceT& s, int numThreads = 1) {
         if(Started()) {
-            if(!Stop(5)) {
+            if(!Stop()) {
                 throw std::runtime_error("Cannot restart");
             }
         }
-        taskFuture_
-            = std::async(std::launch::async, CreateWorker(s));
+        taskFutures_.clear();
+        for(int i = 0; i != numThreads; ++i) {
+            taskFutures_.push_back(
+                std::async(std::launch::async, CreateWorker(s)));
+        }
         Execute(URI);
     }
     ~AsyncServer() {
@@ -153,7 +163,7 @@ private:
     using ReqRep = std::tuple< SocketId, ReqId, ByteArray >;
     SyncQueue< ReqRep > requestQueue_;
     SyncQueue< ReqRep > replyQueue_;
-    std::future< void > taskFuture_;
+    std::vector< std::future< void > > taskFutures_;
     Status status_;
     bool stop_;
 };
