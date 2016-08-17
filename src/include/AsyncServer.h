@@ -164,7 +164,7 @@ public:
         ByteArray data;
     };
 public:
-    Msg Recv() { //blocks until data is available
+    Msg SyncRecv() { //blocks until data is available
         if(!Started())
             throw std::logic_error("Not started");
         SocketId sid;
@@ -173,11 +173,11 @@ public:
         std::tie(sid, rid, data) = requestQueue_.Pop();
         return {sid, rid, data};
     }
-    Msg Recv(Msg msg) {
+    Msg Recv() {
         if(!Started())
             throw std::logic_error("Not started");
-        auto d = std::make_tuple(msg.sid, msg.rid, msg.data);
-        return requestQueue_.Pop(std::move(msg));
+        if(requestQueue_.Empty()) return Msg();
+        return requestQueue_.Pop();
     }
     void Send(const Msg& msg) {
         if(!Started())
