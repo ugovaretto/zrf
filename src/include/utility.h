@@ -18,6 +18,7 @@
 #include <iostream>
 #include <stdexcept>
 #include <cstring>
+#include <vector>
 
 
 namespace zrf {
