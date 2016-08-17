@@ -85,10 +85,12 @@ public:
         requestQueue_.Push(nb);
         return ReplyType(*this, rid, std::move(waitList_[rid].get_future()));
     }
-//    template < typename...ArgsT >
-//    Reply< AsyncClient< TransmissionPolicy > >
-//    SendArgs()
-
+    template < typename...ArgsT >
+    Reply< AsyncClient< TransmissionPolicy > >
+    SendArgs(ArgsT...args) {
+        ByteArray buffer = srz::Pack(args...);
+        return Send(buffer);
+    }
     ///@param timeoutSeconds file stop request then wait until timeout before
     ///       returning
     bool Stop(int timeoutSeconds = 4) { //sync

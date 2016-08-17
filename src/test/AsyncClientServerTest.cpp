@@ -13,6 +13,7 @@ using namespace std;
 using namespace zrf;
 using namespace srz;
 
+//reverse sequence
 template < typename BiDirIt >
 void Reverse(BiDirIt b, BiDirIt e) {
     if(b == e) return;
@@ -27,6 +28,7 @@ void Reverse(BiDirIt b, BiDirIt e) {
     }
 }
 
+//reverse string
 string Reverse(string s) {
     Reverse(s.begin(), s.end());
     return s;
@@ -38,24 +40,39 @@ int main(int, char**) {
     using Client = AsyncClient<>;
     using Server = AsyncServer<>;
     using Rep = Client::ReplyType;
-    Client client(URI);
+
+    //SERVER
+    Server server;
+    //server receives a service object used to service client requests
     auto service = [](const ByteArray& req) {
         string s = UnPack< string >(req);
         Reverse(s.begin(), s.end());
         return Pack(s);
     };
-    Server server;
-    //thread is terminated by calling Stop in Server destructor on exit
-    packaged_task< void () > task(
-        [&server, service, URI](){server.Start(URI, service);});
-    thread(std::move(task)).detach();
-//    future< void > f = async(launch::async,
-//          [&server, service, URI](){server.Start(URI, service);});
+    //start server in separate thread and service requests
+    future< void > f = async(launch::async,
+          [&server, service, URI](){server.Start(URI, service);});
+
+    //CLIENT
+    Client client(URI);
     const string reqString = "hello";
+    //create reference data for validation purposes
     string refRepString = Reverse(reqString);
-    ByteArray req = Pack(reqString);
-    Rep rep = client.Send(req);
-    string repString = rep; //UnPack< string >(rep.Get());
+    //create byte array to send...
+    //ByteArray req = Pack(reqString);
+    //asynchronously send request
+    //Rep rep = client.Send(req);
+    //...or just invoke SendArgs directly with any number of arguments for which
+    //a serializer specialization is available
+    Rep rep = client.SendArgs(reqString);
+    //Rep encapsulates a sent request and will block on .Get() waiting
+    //to receive a response
+    //when assigning directly to a type T .Get() gets invoked automatically
+    //through operator T()
+    //receive, extract and return reply
+    string repString = rep; //equivalent to UnPack< string >(rep.Get());
+
+    //VALIDATE
     assert(repString == refRepString);
     cout << "PASSED" << endl;
     return EXIT_SUCCESS;
