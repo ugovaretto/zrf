@@ -61,7 +61,7 @@ private:
     mutable std::future< ByteArray > repFuture_;
 };
 
-ReqId NewReqId() {
+inline ReqId NewReqId() {
     static std::atomic< ReqId > rid(ReqId(0));
     ++rid;
     return rid;
