@@ -44,6 +44,7 @@ namespace zrf {
 
 template < typename TransmissionPolicyT = NoSizeInfoTransmissionPolicy >
 class AsyncServer : TransmissionPolicyT {
+    using SocketId = std::vector< char >;
 public:
     using TransmissionPolicy = TransmissionPolicyT;
     enum Status {STARTED, STOPPED};
@@ -86,6 +87,18 @@ public:
             taskFutures_.push_back(
                 std::async(std::launch::async, CreateWorker(s)));
         }
+        Execute(URI);
+    }
+    void Start(const char* URI) {
+        if(Started()) {
+            if(!Stop()) {
+                throw std::runtime_error("Cannot restart");
+            }
+        }
+        taskFutures_.clear();
+        taskFutures_.push_back(
+                std::async(std::launch::async,
+                           [this](const char* uri){ this->Execute(uri);}));
         Execute(URI);
     }
     ~AsyncServer() {
@@ -144,6 +157,34 @@ private:
         CleanupZMQResources(ctx, s);
         status_ = STOPPED;
     }
+public:
+    struct Msg {
+        SocketId sid;
+        ReqId id;
+        ByteArray data;
+    };
+public:
+    Msg Recv() { //blocks until data is available
+        if(!Started())
+            throw std::logic_error("Not started");
+        SocketId sid;
+        ReqId rid;
+        ByteArray data;
+        std::tie(sid, rid, data) = requestQueue_.Pop();
+        return {sid, rid, data};
+    }
+    Msg Recv(Msg msg) {
+        if(!Started())
+            throw std::logic_error("Not started");
+        auto d = std::make_tuple(msg.sid, msg.rid, msg.data);
+        return requestQueue_.Pop(std::move(msg));
+    }
+    void Send(const Msg& msg) {
+        if(!Started())
+            throw std::logic_error("Not started");
+        auto d = std::make_tuple(msg.sid, msg.rid, msg.data);
+        replyQueue_.Push(d);
+    }
 private:
     void CleanupZMQResources(void* ctx, void* s) {
         if(s)
@@ -171,7 +212,6 @@ private:
         return std::make_tuple(nullptr, nullptr);
     };
 private:
-    using SocketId = std::vector< char >;
     using ReqRep = std::tuple< SocketId, ReqId, ByteArray >;
     SyncQueue< ReqRep > requestQueue_;
     SyncQueue< ReqRep > replyQueue_;
@@ -180,5 +220,9 @@ private:
     bool stop_;
 };
 
+template < typename TP >
+inline bool Valid(const typename AsyncServer< TP >::Msg& msg) {
+    return !msg.data.empty();
+}
 
 }
