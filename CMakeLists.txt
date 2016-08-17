@@ -10,4 +10,6 @@ add_executable(serializer-test src/test/SerializerTest.cpp)
 add_executable(rawiostream-test src/test/RAWInOutStreamTest.cpp)
 add_executable(rawiostream-tcp-test src/test/RAWInOutStreamTCPTest.cpp)
 add_executable(async-client-server-test src/test/AsyncClientServerTest.cpp)
+add_executable(async-client-server-test-tcp
+               src/test/AsyncClientServerTestTcp.cpp)
 #add_executable(tim scratch/tim.cpp)
