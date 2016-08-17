@@ -1,5 +1,19 @@
-// Serialization framework
-// Author: Ugo Varetto
+#pragma once
+//Author: Ugo Varetto
+//
+// This file is part of zrf - zeromq remoting framework.
+//zrf is free software: you can redistribute it and/or modify
+//it under the terms of the GNU General Public License as published by
+//the Free Software Foundation, either version 3 of the License, or
+//(at your option) any later version.
+//
+//zrf is distributed in the hope that it will be useful,
+//but WITHOUT ANY WARRANTY; without even the implied warranty of
+//MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//GNU General Public License for more details.
+//
+//You should have received a copy of the GNU General Public License
+//along with zrf.  If not, see <http://www.gnu.org/licenses/>.
 
 //! \file Serialize.h
 //! \brief Implementation of specializations for serializing any type to
@@ -286,7 +300,7 @@ struct GetSerializer< volatile T* >;
 
 //! \defgroup Packing/Unpacking
 //! Serialize data to byte array: void specialization.
-ByteArray Pack(ByteArray ba) {
+inline ByteArray Pack(ByteArray ba) {
     return ba;
 }
 
@@ -304,7 +318,7 @@ ByteArray Pack(const ArgsT&... t) {
 
 //! Serialize data to byte array at position pointed by iterator,
 //! void specialization
-ByteIterator Pack(ByteIterator bi) {
+inline ByteIterator Pack(ByteIterator bi) {
     return bi;
 }
 
@@ -316,7 +330,7 @@ ByteIterator Pack(ByteIterator bi, const T& h, const ArgsT&... t) {
 
 
 //! Serialize data to byte array in place, termination condition
-size_t Pack(ByteArray&) {
+inline size_t Pack(ByteArray&) {
     return 0;
 }
 
