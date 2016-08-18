@@ -86,6 +86,7 @@ public:
         ByteArray nb;
         rid = rid == ReqId() ? NewReqId() :  rid;
         nb = srz::Pack(rid, req);
+        requestQueue_.Push(nb);
         //put promise in waitlist
         std::promise< ByteArray > p;
         if(!expectReply) {
@@ -94,7 +95,6 @@ public:
         }
         std::lock_guard< std::mutex > lg(waitListMutex_);
         waitList_[rid] = std::move(p);
-        requestQueue_.Push(nb);
         return ReplyType(*this, rid, std::move(waitList_[rid].get_future()));
     }
     template < typename...ArgsT >
