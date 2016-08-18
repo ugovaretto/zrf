@@ -125,6 +125,11 @@ std::string ReceiveAddress(int portno) {
     return hostaddrp;
 }
 
+std::string ReceiveZMQAddress(int portno) {
+    const std::string addr = ReceiveAddress(portno);
+    return "tcp://" + addr + ":" + std::to_string(portno);
+}
+
 //==============================================================================
 struct AddrInfo {
     int port;

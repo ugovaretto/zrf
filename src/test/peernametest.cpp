@@ -35,7 +35,7 @@ int main(int argc, char** argv) {
     void* s = isServer ? zmq_socket(ctx, ZMQ_REP) : zmq_socket(ctx, ZMQ_REQ);
     vector< char > buffer(0x100);
     if(isServer) {
-        assert(ReceiveAddress(6667) == "tcp://localhost:6667");
+        assert(ReceiveZMQAddress(6667) == "tcp://127.0.0.1:6667");
         zmq_bind(s, URI);
         while(true) {
             assert(zmq_recv(s, &buffer[0], buffer.size(), 0) >= 0);
