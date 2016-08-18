@@ -80,9 +80,9 @@ public:
         Start(URI);
     }
     ReplyType
-    Send(const ByteArray& req,
-         ReqId rid = ReqId(),
-         bool expectReply = true) {
+    Send(bool expectReply,
+         const ByteArray& req,
+         ReqId rid = ReqId()) {
         ByteArray nb;
         rid = rid == ReqId() ? NewReqId() :  rid;
         nb = srz::Pack(rid, req);
@@ -101,7 +101,7 @@ public:
     Reply< AsyncClient< TransmissionPolicy > >
     SendArgs(bool requestReply, ArgsT...args) {
         ByteArray buffer = srz::Pack(args...);
-        return Send(buffer, NewReqId()), requestReply);
+        return Send(requestReply, buffer, NewReqId());
     }
     ///@param timeoutSeconds file stop request then wait until timeout before
     ///       returning
@@ -111,11 +111,13 @@ public:
             taskFuture_.wait_for(std::chrono::seconds(timeoutSeconds));
         const bool ok = fs == std::future_status::ready;
         using M = std::map< ReqId, std::promise< ByteArray > >;
+        //unlock all futures waiting on promises
+        //or should we set an exception ?
         if(ok)
             for(M::iterator i = waitList_.begin();
                 i != waitList_.end();
                 ++i)
-                i->second.set_value(ByteArray()); //or should we set an exception ?
+                i->second.set_value(ByteArray());
         return ok;
     }
     bool Started() const {

@@ -13,4 +13,4 @@ add_executable(async-client-server-test src/test/AsyncClientServerTest.cpp)
 add_executable(async-client-server-test-tcp
                src/test/AsyncClientServerTestTcp.cpp)
 add_executable(handshake-test src/test/TestHandShake.cpp)
-#add_executable(tim scratch/tim.cpp)
+add_executable(peer-name-test tmp-scratch/peernametest.cpp)

@@ -27,7 +27,7 @@ using namespace zrf;
 int main(int, char**) {
     const char* URI = "ipc://hshake";
     //initiator
-    std::async(std::launch::async, [](const char* uri){
+    future< void > task = std::async(std::launch::async, [](const char* uri){
         const string msg = "Hello";
         const bool initiator = true;
         const string reply = HandShake< string >(uri, initiator, 0x100, msg);

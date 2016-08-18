@@ -7,4 +7,4 @@ Dependencies
 -----------
 
 - https://github.com/ugovaretto/serializer.git (Serialization Framework)
-- https://github.com/ugovaretto/syncqueue.git (Synchronizes Queue)
+- https://github.com/ugovaretto/syncqueue.git (Synchronized Queue)
