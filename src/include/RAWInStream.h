@@ -109,6 +109,7 @@ public:
     template< typename CallbackT >
     void Loop(const CallbackT& cback) { //sync
         while (!stop_) {
+            if(queue_.Empty()) continue;
             if(!cback(queue_.Pop()))
                 break;
         }
@@ -167,7 +168,7 @@ private:
                 / std::chrono::duration_cast< std::chrono::seconds >(delay)
                     .count() : 0;
         int retry = 0;
-        const bool blockOption = true;
+        const bool blockOption = false;
         status_ = STARTED;
         bool restart = false;
         while(!stop_) {
