@@ -1,7 +1,7 @@
 ZeroMQ Remoting Framework
 =========================
 
-Set of C++11 classes useful for RPC, streaming and RMI designs.
+Set of C++11 classes useful for RPC, streaming and RMI implementations.
 
 Dependencies
 -----------
