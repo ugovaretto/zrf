@@ -94,8 +94,11 @@ public:
         Start(URI, buffersize, timeout);
     }
     void Stop() { //call from separate thread
-        stop_ = true;
-        taskFuture_.get();
+        if(status_ == STOPPED) return;
+        stop_ = true; //signal stop request
+        queue_.Push(ByteArray()); //add empty data into queue, so that
+                                  //queue_.Pop() returns
+        taskFuture_.get();        //wait for Loop() to exit
         status_ = STOPPED;
     }
     template < typename CallbackT, typename...ArgsT >
@@ -107,11 +110,15 @@ public:
         }
     };
     template< typename CallbackT >
-    void Loop(const CallbackT& cback) { //sync
-        while (!stop_) {
-            if(queue_.Empty()) continue;
-            if(!cback(queue_.Pop()))
-                break;
+    void Loop(const CallbackT& cback) { //sync: call from separate thread
+        while(!stop_) {                 //or in main thread and signal
+            //when Stop is called it:   //termination through request coming
+            // - sets stop to true      //from other communication endpoint
+            // - adds an empty array into the queue so this is guaranteed
+            //   to always return when calling Stop
+            ByteArray d(queue_.Pop());
+            if(stop_) break;
+            else if(!cback(d)) break;
         }
     }
     bool Started() const {
@@ -131,6 +138,7 @@ public:
             Stop();
             taskFuture_.get();
         }
+        stop_ = false;
         taskFuture_
             = std::async(std::launch::async,
                          CreateWorker(), URI,

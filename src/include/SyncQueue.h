@@ -66,6 +66,8 @@ public:
         return e;
     }
     //! Empty ?
+    //! This is intended to be used \em only when data access happens
+    //! from inside a pre-existing loop
     bool Empty() const {
         std::lock_guard< std::mutex > lg(mutex_);
         const bool e = queue_.empty();

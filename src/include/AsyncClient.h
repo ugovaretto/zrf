@@ -172,6 +172,9 @@ private:
                 auto di = srz::UnPackTuple< ReqId, ByteArray >(recvBuffer);
                 waitList_[std::get< 0 >(di)].set_value(std::get< 1 >(di));
             }
+            //here it is required because in the loop we are both inserting
+            //and receiving data inot two separate queue, and we need to
+            //check if there is data to send
             if(requestQueue_.Empty()) continue;
             ByteArray buffer(requestQueue_.Pop());
             TransmissionPolicy::SendBuffer(s, buffer);

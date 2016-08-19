@@ -59,7 +59,9 @@ public:
     ///@param timeoutSeconds file stop request then wait until timeout before
     ///       returning
     bool Stop(int timeoutSeconds = 4) { //sync
-        stop_ = true;
+        stop_ = true; // request termination
+        requestQueue_.Push(ByteArray()); //add data into queue to unlock
+                                         //wait condition in Pop
         std::vector< std::future_status > status;
         using It = std::vector< std::future< void > >::iterator;
         for(It f = taskFutures_.begin(); f != taskFutures_.end(); ++f)
@@ -108,12 +110,14 @@ private:
     template < typename ServiceT >
     std::function< void () > CreateWorker(const ServiceT& service) {
         return [this, service]() {
-            while(!this->stop_) {
+            while(true) {
                 SocketId id;
                 ReqId rid;
                 ByteArray req;
-                if(this->requestQueue_.Empty()) continue;
-                std::tie(id, rid, req) = this->requestQueue_.Pop();
+                std::tuple< SocketId, ReqId, ByteArray > d
+                    = this->requestQueue_.Pop();
+                if(stop_) break;
+                std::tie(id, rid, req) = d;
                 this->replyQueue_.Push(std::make_tuple(id, rid, service(req)));
             }
         };
@@ -148,6 +152,9 @@ private:
                     srz::UnPackTuple< ReqId, ByteArray >(recvBuffer);
                 requestQueue_.Push(std::make_tuple(id, rid, req));
             }
+            //here we need to check if there is any data available to send
+            //so a call to Empty() is required if not the loop will stall
+            //which would also prevent data from being received
             if(replyQueue_.Empty()) continue;
             std::tie(id, rid, rep) = replyQueue_.Pop();
             ZCheck(zmq_send(s, id.data(), id.size(), ZMQ_SNDMORE));
@@ -173,10 +180,13 @@ public:
         std::tie(sid, rid, data) = requestQueue_.Pop();
         return {sid, rid, data};
     }
-    Msg Recv() {
+    //use in loop to check if any message has been received
+    Msg Recv(Msg&& emptyMessage = Msg()) {
         if(!Started())
             throw std::logic_error("Not started");
-        if(requestQueue_.Empty()) return Msg();
+        //ok to call empty: called to check if message available
+        //while already in a loop
+        if(requestQueue_.Empty()) return emptyMessage;
         return requestQueue_.Pop();
     }
     void Send(const Msg& msg) {

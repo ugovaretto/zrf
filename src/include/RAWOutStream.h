@@ -81,9 +81,12 @@ public:
     ///@param timeoutSeconds file stop request then wait until timeout before
     ///       returning
     bool Stop(int timeoutSeconds = 4) { //sync
+        if(status_ == STOPPED) return true;
         stop_ = true;
+        queue_.Push(ByteArray());
         const std::future_status fs =
             taskFuture_.wait_for(std::chrono::seconds(timeoutSeconds));
+        status_ = STOPPED;
         return fs == std::future_status::ready;
     }
     bool Started() const {
@@ -95,6 +98,8 @@ public:
                 throw std::runtime_error("Cannot restart");
             }
         }
+        status_ = STARTED;
+        stop_ = false;
         taskFuture_
             = std::async(std::launch::async, CreateWorker(), URI);
     }
@@ -113,7 +118,6 @@ private:
         std::tie(ctx, pub) = CreateZMQContextAndSocket(URI);
         status_ = STARTED;
         while(!stop_) {
-            if(queue_.Empty()) continue;
             ByteArray buffer(queue_.Pop());
             SendPolicy::SendBuffer(pub, buffer);
         }
