@@ -170,6 +170,7 @@ private:
                 const bool blockOption = true;
                 TransmissionPolicy::ReceiveBuffer(s, recvBuffer, blockOption);
                 auto di = srz::UnPackTuple< ReqId, ByteArray >(recvBuffer);
+                if(!std::get< 0 >(di)) continue;
                 waitList_[std::get< 0 >(di)].set_value(std::get< 1 >(di));
             }
             //here it is required because in the loop we are both inserting

@@ -60,7 +60,7 @@ public:
     ///       returning
     bool Stop(int timeoutSeconds = 4) { //sync
         stop_ = true; // request termination
-        requestQueue_.Push(ReqRep()); //add data into queue to unlock
+        requestQueue_.PushFront(ReqRep()); //add data into queue to unlock
                                          //wait condition in Pop
         std::vector< std::future_status > status;
         using It = std::vector< std::future< void > >::iterator;
@@ -157,6 +157,8 @@ private:
             //which would also prevent data from being received
             if(replyQueue_.Empty()) continue;
             std::tie(id, rid, rep) = replyQueue_.Pop();
+            //no reply on request id 0
+            if(!rid) continue;
             ZCheck(zmq_send(s, id.data(), id.size(), ZMQ_SNDMORE));
             ZCheck(zmq_send(s, nullptr, 0, ZMQ_SNDMORE));
             TransmissionPolicy::SendBuffer(s, srz::PackArgs(rid, rep));
