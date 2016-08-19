@@ -60,7 +60,7 @@ public:
     ///       returning
     bool Stop(int timeoutSeconds = 4) { //sync
         stop_ = true; // request termination
-        requestQueue_.Push(ByteArray()); //add data into queue to unlock
+        requestQueue_.Push(ReqRep()); //add data into queue to unlock
                                          //wait condition in Pop
         std::vector< std::future_status > status;
         using It = std::vector< std::future< void > >::iterator;
