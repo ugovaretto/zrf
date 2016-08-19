@@ -21,9 +21,7 @@
 #include <iostream>
 #include <tuple>
 
-//#define LOG__ 1
-
-#if LOG__
+#ifdef LOG__
 #include <algorithm>
 #include <iterator>
 #endif
@@ -51,11 +49,6 @@ int main(int, char**) {
     const ByteArray voutBuf = VIntSerializer::Pack(vintOut);
     vector< int > vintIn;
     VIntSerializer::UnPack(begin(voutBuf), vintIn);
-#if LOG__
-    cout << endl;
-    copy(vintIn.begin(), vintIn.end(), ostream_iterator< int >(cout, " "));
-    cout << endl;
-#endif
     assert(vintIn.size() == vintOut.size());
     assert(vintIn == vintOut);
     //string
@@ -111,12 +104,19 @@ int main(int, char**) {
     assert(make_tuple(first, second, third) ==
            make_tuple(1, 2.0, 3.1f));
     assert(it == tv.cend());
-#if LOG__
-    cout << endl;
-    copy(vsin.begin(), vsin.end(), ostream_iterator< string >(cout, "\n"));
-    cout << endl;
-#endif
     assert(vsin == vsout);
+
+    //map
+    map< string, string > mapin = {
+        {"one", "one"},
+        {"two", "owt"},
+        {"three", "eerht"}
+    };
+    using MapSerializer = typename GetSerializer< decltype(mapin) >::Type;
+    ByteArray mba = MapSerializer::Pack(mapin);
+    map< string, string> mapout;
+    MapSerializer::UnPack(begin(mba), mapout);
+    assert(mapin == mapout);
     cout << "PASSED" << endl;
     return EXIT_SUCCESS;
 }

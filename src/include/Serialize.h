@@ -40,6 +40,7 @@
 #include <vector>
 #include <string>
 #include <type_traits>
+#include <map>
 
 //! Serialization framework
 namespace srz {
@@ -169,6 +170,8 @@ struct SerializeVector {
     }
 };
 
+
+
 //! \c std::string serialization.
 struct SerializeString {
     using T = std::string::value_type;
@@ -187,6 +190,48 @@ struct SerializeString {
         return bi;
     }
 };
+
+//! Specialization for \c std::map
+template< typename K, typename T >
+struct SerializeMap {
+    using KS = typename GetSerializer< K >::Type;
+    using VS = typename GetSerializer< T >::Type;
+    using SS = SerializePOD< size_t >;
+    static ByteArray Pack(const std::map< K, T >& m,
+                          ByteArray buf = ByteArray()) {
+        buf = SS::Pack(m.size(), buf);
+        for(auto& mi: m) {
+            buf = KS::Pack(mi.first, buf);
+            buf = VS::Pack(mi.second, buf);
+        }
+        return buf;
+    }
+    static ByteIterator Pack(const std::map< K, T >& m, ByteIterator bi) {
+        bi = SS::Pack(m.size(), bi);
+        for(auto& mi: m) {
+            bi = KS::Pack(mi.first, bi);
+            bi = VS::Pack(mi.second, bi);
+        }
+        return bi;
+    }
+    static ConstByteIterator UnPack(ConstByteIterator bi,
+                                    std::map< K, T >& d) {
+
+        size_t size = 0;
+        bi = SS::UnPack(bi, size);
+        for(size_t i = 0; i != size; ++i) {
+            K key;
+            T value;
+            bi = KS::UnPack(bi, key);
+            bi = VS::UnPack(bi, value);
+            d.insert(std::make_pair(key, value));
+        }
+        return bi;
+    }
+};
+
+
+
 //! @}
 
 //! \defgroup \code [Serializer selection]
@@ -283,6 +328,12 @@ struct GetSerializer< volatile std::tuple< ArgsT... > > {
     typename std::conditional< detail::And< std::is_pod< ArgsT >... >::Value,
                                SerializePOD< std::tuple< ArgsT... > >,
                                Serialize< std::tuple< ArgsT... > > >::type;
+};
+
+
+template < typename K, typename T >
+struct GetSerializer< std::map< K, T > > {
+    using Type = SerializeMap< K, T >;
 };
 
 //! \defgroup raw pointer serialization
