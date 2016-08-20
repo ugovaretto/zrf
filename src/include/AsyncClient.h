@@ -65,6 +65,10 @@ private:
 inline ReqId NewReqId() {
     static std::atomic< ReqId > rid(ReqId(0));
     ++rid;
+    //reached max size, restarting
+    int zero = 0;
+    std::atomic_compare_exchange_strong(&rid, &zero, 1);
+    assert(rid != ReqId(0));
     return rid;
 }
 
