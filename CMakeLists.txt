@@ -11,6 +11,6 @@ add_executable(rawiostream-test src/test/RAWInOutStreamTest.cpp)
 add_executable(rawiostream-tcp-test src/test/RAWInOutStreamTCPTest.cpp)
 add_executable(async-client-server-test src/test/AsyncClientServerTest.cpp)
 add_executable(async-client-server-test-tcp
-               src/test/AsyncClientServerTestTcp.cpp)
+        src/test/AsyncClientServerTCPTest.cpp)
 add_executable(handshake-test src/test/TestHandShake.cpp)
 add_executable(peer-name-test src/test/peernametest.cpp)

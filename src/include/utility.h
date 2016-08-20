@@ -164,4 +164,18 @@ struct SizeInfoTransmissionPolicy {
 
 using ReqId = int;
 
+
+struct TRUE_TYPE {};
+struct FALSE_TYPE {};
+
+template < bool B >
+struct BoolToType {
+    using Type = FALSE_TYPE;
+};
+
+template <>
+struct BoolToType< true > {
+    using Type = TRUE_TYPE;
+};
+
 }

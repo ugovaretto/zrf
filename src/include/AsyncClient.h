@@ -61,6 +61,7 @@ private:
     mutable std::future< ByteArray > repFuture_;
 };
 
+//0 is considered a NULL request id
 inline ReqId NewReqId() {
     static std::atomic< ReqId > rid(ReqId(0));
     ++rid;
@@ -79,29 +80,38 @@ public:
     AsyncClient(const char* URI) : status_(STOPPED), stop_(false) {
         Start(URI);
     }
-    ReplyType
-    Send(bool expectReply,
-         const ByteArray& req,
-         ReqId rid = ReqId()) {
+    void
+    SendNoReply(const ByteArray& req) {
         ByteArray nb;
-        rid = rid == ReqId() ? NewReqId() :  rid;
+        const ReqId rid(0);
         nb = srz::Pack(rid, req);
         requestQueue_.Push(nb);
-        //put promise in waitlist
+    }
+    ReplyType
+    Send(const ByteArray& req,
+         ReqId rid = ReqId(0)) {
+        ByteArray nb;
+        rid = rid == ReqId(0) ? NewReqId() :  rid;
+        nb = srz::Pack(rid, req);
+        requestQueue_.Push(nb);
+        //put promise into waitlist
+        //promise::set_value is invoked when matching reply is received
         std::promise< ByteArray > p;
-        if(!expectReply) {
-            p.set_value(ByteArray());
-            return ReplyType(*this, ReqId(), std::move(p.get_future()));
-        }
         std::lock_guard< std::mutex > lg(waitListMutex_);
         waitList_[rid] = std::move(p);
         return ReplyType(*this, rid, std::move(waitList_[rid].get_future()));
     }
     template < typename...ArgsT >
     Reply< AsyncClient< TransmissionPolicy > >
-    SendArgs(bool requestReply, ArgsT...args) {
+    SendArgs(ArgsT...args) {
         ByteArray buffer = srz::Pack(args...);
-        return Send(requestReply, buffer, NewReqId());
+        return Send(buffer);
+    }
+    template < typename...ArgsT >
+    Reply< AsyncClient< TransmissionPolicy > >
+    SendArgsNoReply(ArgsT...args) {
+        ByteArray buffer = srz::Pack(args...);
+        return SendNoReply(buffer);
     }
     ///@param timeoutSeconds file stop request then wait until timeout before
     ///       returning

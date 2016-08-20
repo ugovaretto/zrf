@@ -85,12 +85,15 @@ public:
             }
         }
         taskFutures_.clear();
+        using BT = typename
+            BoolToType< std::is_void< decltype(s(ByteArray())) >::value >::Type;
         for(int i = 0; i != numThreads; ++i) {
-            taskFutures_.push_back(
-                std::async(std::launch::async, CreateWorker(s)));
+            taskFutures_.push_back(std::async(std::launch::async,
+               CreateWorker(s, BT())));
         }
         Execute(URI);
     }
+    //start without re-creating workers, useful when restarting
     void Start(const char* URI) {
         if(Started()) {
             if(!Stop()) {
@@ -107,8 +110,10 @@ public:
         Stop();
     }
 private:
+    //create worker: non void return type case
     template < typename ServiceT >
-    std::function< void () > CreateWorker(const ServiceT& service) {
+    std::function< void () > CreateWorker(const ServiceT& service,
+                                          FALSE_TYPE nonVoidReturnType) {
         return [this, service]() {
             while(true) {
                 SocketId id;
@@ -118,7 +123,34 @@ private:
                     = this->requestQueue_.Pop();
                 if(stop_) break;
                 std::tie(id, rid, req) = d;
-                this->replyQueue_.Push(std::make_tuple(id, rid, service(req)));
+                //if request id != 0 add reply into queue, if not just
+                //invoke the service functor
+                if(rid != ReqId(0))
+                    this->replyQueue_.Push(
+                        std::make_tuple(id, rid, service(req)));
+                else
+                    service(req);
+            }
+        };
+    }
+    //create worker: void return type case
+    template < typename ServiceT >
+    std::function< void () > CreateWorker(const ServiceT& service,
+                                          TRUE_TYPE voidReturnType) {
+        return [this, service]() {
+            while(true) {
+                SocketId id;
+                ReqId rid;
+                ByteArray req;
+                std::tuple< SocketId, ReqId, ByteArray > d
+                    = this->requestQueue_.Pop();
+                if(stop_) break;
+                service(req);
+                //since return type is void do return an empty reply if
+                //a reply is requested; note that it is correct to request
+                //a reply as an ack that the request has been processed
+                if(rid == ReqId(0)) replyQueue_.Push(
+                        std::make_tuple(id, rid, ByteArray()));
             }
         };
     }

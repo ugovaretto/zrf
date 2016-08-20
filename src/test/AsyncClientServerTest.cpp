@@ -71,17 +71,13 @@ int main(int, char**) {
     const string reqString = "hello";
     //create reference data for validation purposes
     string refRepString = Reverse(reqString);
-    //specify if a reply is expected
-    //when a reply is not expected the promise immediately sets the
-    //value to an empty ByteArray
-    const bool requestReplyOption = true;
     //create byte array to send...
     //ByteArray req = Pack(reqString);
     //asynchronously send request
     //Rep rep = client.Send(requestReplyOption, req);
     //...or just invoke SendArgs directly with any number of arguments for which
     //a serializer specialization is available
-    Rep rep = client.SendArgs(requestReplyOption, reqString);
+    Rep rep = client.SendArgs(reqString);
     //Rep encapsulates a sent request and will block on .Get() waiting
     //to receive a response
     //when assigning directly to a type T .Get() gets invoked automatically
