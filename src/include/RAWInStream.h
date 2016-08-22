@@ -101,24 +101,31 @@ public:
         taskFuture_.get();        //wait for Loop() to exit
     }
     template < typename CallbackT, typename...ArgsT >
-    void LoopArgs(const CallbackT& cback) {
+    bool LoopArgs(const CallbackT& cback) {
         while(!stop_) {
             ByteArray buf(queue_.Pop());
             std::tuple< ArgsT... > args = srz::UnPackTuple< ArgsT... >(buf);
-            return CallF< bool >(cback, args);
+            if(!stop_) {
+                if(!CallF< bool >(cback, args))
+                    break;
+            }
         }
-    };
+        return !TimedOut();
+    }
     template< typename CallbackT >
-    void Loop(const CallbackT& cback) { //sync: call from separate thread
+    bool Loop(const CallbackT& cback) { //sync: call from separate thread
         while(!stop_) {                 //or in main thread and signal
             //when Stop is called it:   //termination through request coming
             // - sets stop to true      //from other communication endpoint
             // - adds an empty array into the queue so this is guaranteed
             //   to always return when calling Stop
             ByteArray d(queue_.Pop());
-            if(stop_) break;
-            else if(!cback(d)) break;
+            if(!stop_) {
+                if(!cback(d))
+                    break;
+            }
         }
+        return !TimedOut();
     }
     bool Started() const {
         return status_ & STARTED;
