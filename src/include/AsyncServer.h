@@ -145,6 +145,7 @@ private:
                 std::tuple< SocketId, ReqId, ByteArray > d
                     = this->requestQueue_.Pop();
                 if(stop_) break;
+                std::tie(id, rid, req) = d;
                 service(req);
                 //since return type is void do return an empty reply if
                 //a reply is requested; note that it is correct to request
