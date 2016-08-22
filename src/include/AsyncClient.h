@@ -112,10 +112,10 @@ public:
         return Send(buffer);
     }
     template < typename...ArgsT >
-    Reply< AsyncClient< TransmissionPolicy > >
+    void
     SendArgsNoReply(ArgsT...args) {
         ByteArray buffer = srz::Pack(args...);
-        return SendNoReply(buffer);
+        SendNoReply(buffer);
     }
     ///@param timeoutSeconds file stop request then wait until timeout before
     ///       returning
