@@ -42,7 +42,7 @@ int main(int, char**) {
     //ipc and tcp do work inproc does not!
     const char* URI = "ipc://outstream";
 
-    const int NUM_MESSAGES = 10;
+    const int NUM_MESSAGES = 100;
     const int MESSAGE_SIZE = sizeof(int);
 
     //SUB (receive)
@@ -50,6 +50,7 @@ int main(int, char**) {
         RawIStream is(uri, MESSAGE_SIZE);
         // use uri = "tcp://<hostname or address>:port" to connect
         int count = 0;
+
         is.Loop([&count, NUM_MESSAGES](const vector< char >& v) {
             if(!v.empty()) {
                 assert(v.size() == MESSAGE_SIZE);
