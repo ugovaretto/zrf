@@ -228,7 +228,7 @@ private:
             throw e;
         }
         return std::make_tuple(nullptr, nullptr);
-    };
+    }
 private:
     enum {URI = 0, BUFSIZE = 1, TIMEOUT = 2};
     SyncQueue< ByteArray > queue_;

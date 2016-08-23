@@ -178,4 +178,8 @@ struct BoolToType< true > {
     using Type = TRUE_TYPE;
 };
 
+inline bool IsServerURI(const std::string& s) {
+    return s.find("*") != std::string::npos;
+}
+
 }
