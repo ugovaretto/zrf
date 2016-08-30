@@ -117,6 +117,18 @@ int main(int, char**) {
     map< string, string> mapout;
     MapSerializer::UnPack(begin(mba), mapout);
     assert(mapin == mapout);
+
+    //struct with embedded C array
+    struct MouseEvent {
+        int x;
+        int y;
+        char key[100];
+    } ref = {100, 200, {"CTRL-B"}};
+    ByteArray in = Pack(ref);
+    MouseEvent me = UnPack< MouseEvent >(in);
+    assert(memcmp(&me, &ref, sizeof(MouseEvent)) == 0); //no difference
+
     cout << "PASSED" << endl;
+
     return EXIT_SUCCESS;
 }

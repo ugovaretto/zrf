@@ -78,7 +78,11 @@ public:
         return status_ == STARTED;
     }
     template < typename ServiceT >
-    void Start(const char* URI, const ServiceT& s, int numThreads = 1) {
+    void Start(const char* URI,
+               const ServiceT& s,
+               size_t bufferSize = 0x100000, //1 MB
+               int timeoutms = 2, //1 ms
+               int numThreads = 1) {
         if(Started()) {
             if(!Stop()) {
                 throw std::runtime_error("Cannot restart");
@@ -91,8 +95,13 @@ public:
             taskFutures_.push_back(std::async(std::launch::async,
                CreateWorker(s, BT())));
         }
-        Execute(URI);
+        //sync call: starts loop which polls socket then:
+        // - forwards received requests to running service instances in
+        //  separate threads
+        // - sends replied back to connected clients
+        Execute(URI, bufferSize, timeoutms);
     }
+#if 0 //UV XXX: Check!!!
     //start without re-creating workers, useful when restarting
     void Start(const char* URI) {
         if(Started()) {
@@ -106,6 +115,7 @@ public:
                            [this](const char* uri){ this->Execute(uri);}));
         Execute(URI);
     }
+#endif
     ~AsyncServer() {
         Stop();
     }
@@ -162,19 +172,19 @@ private:
     //| ID |
     //| 0 bytes |
     //| message |
-    void Execute(const char* URI) {
+    void Execute(const char* URI, size_t bufferSize, int timeoutms) {
         void* ctx = nullptr;
         void* s = nullptr;
         std::tie(ctx, s) = CreateZMQContextAndSocket(URI);
         status_ = STARTED;
         zmq_pollitem_t items[] = { { s, 0, ZMQ_POLLIN, 0 } };
-        ByteArray recvBuffer(0x1000);
+        ByteArray recvBuffer(bufferSize);
         SocketId id(0x100);
         ReqId rid;
         ByteArray req;
         ByteArray rep;
         while(!stop_) {
-            ZCheck(zmq_poll(items, 1, 100)); //poll with 100ms timeout
+            ZCheck(zmq_poll(items, 1, timeoutms)); //poll with 100ms timeout
             if(items[0].revents & ZMQ_POLLIN) {
                 size_t len = 0;
                 const int irc = ZCheck(zmq_recv(s, &id[0], id.size(), 0));

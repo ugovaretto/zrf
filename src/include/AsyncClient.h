@@ -137,14 +137,17 @@ public:
     bool Started() const {
         return status_ == STARTED;
     }
-    void Start(const char* URI) {
+    void Start(const char* URI,
+               size_t bufferSize = 0x10000, //64kB
+               int timeoutms = 1) { //1ms
         if(Started()) {
             if(!Stop(5)) {
                 throw std::runtime_error("Cannot restart");
             }
         }
         taskFuture_
-            = std::async(std::launch::async, CreateWorker(), URI);
+            = std::async(std::launch::async, CreateWorker(),
+                         URI, bufferSize, timeoutms);
     }
     ~AsyncClient() {
         Stop();
@@ -153,32 +156,37 @@ private:
     friend class Reply< AsyncClient< TransmissionPolicy > >;
     void Remove(ReqId rid) {
         //in case of requests not needing a reply this function is
-        //invoked a default constructed ReqId
-        if(rid == ReqId()) return;
+        //invoked with ReqId = 0
+        if(rid == ReqId(0)) return;
         std::lock_guard< std::mutex > lg(waitListMutex_);
         if(waitList_.find(rid) == waitList_.end())
             throw std::logic_error("Request id " + std::to_string(rid) +
                                    " not found");
         waitList_.erase(rid);
     }
-    std::function< void (const char*) > CreateWorker() {
-        return [this](const char* URI) {
-            this->Execute(URI);
+    std::function< void (const char*, size_t, int) > CreateWorker() {
+        //- buffer size is the initial size of the send/recv buffer
+        //but it's up to the used transmission policy base class to decide
+        //when/if to resize
+        //- timeoutms is the poll timeout passed to zmq (and most likely
+        //to select() underneath)
+        return [this](const char* URI, size_t bufferSize, int timeoutms ) {
+            this->Execute(URI, bufferSize, timeoutms);
         };
     }
 
     //Envelope received from router:
     //| 0 bytes|
     //| message bytes|
-    void Execute(const char* URI) {
+    void Execute(const char* URI, size_t bufferSize, int timeoutms) {
         void* ctx = nullptr;
         void* s = nullptr;
         std::tie(ctx, s) = CreateZMQContextAndSocket(URI);
         status_ = STARTED;
         zmq_pollitem_t items[] = { { s, 0, ZMQ_POLLIN, 0 } };
-        ByteArray recvBuffer(0x1000);
+        ByteArray recvBuffer(bufferSize);
         while(!stop_) {
-            ZCheck(zmq_poll(items, 1, 100)); //poll with 100ms timeout
+            ZCheck(zmq_poll(items, 1, timeoutms)); //poll with 100ms timeout
             if(items[0].revents & ZMQ_POLLIN) {
                 ZCheck(zmq_recv(s, 0, 0, 0));
                 const bool blockOption = true;

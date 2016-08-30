@@ -187,18 +187,18 @@ public:
     ByteArray Invoke(int reqid, const ByteArray& args) {
         return methods_[reqid].Invoke(args);
     }
-    void Start() {
+    void Start(size_t bufferSize = 0x100000, int timeoutms = 2) {
         void* ctx = ZCheck(zmq_ctx_new());
         void* r = ZCheck(zmq_socket(ctx, ZMQ_ROUTER));
         ZCheck(zmq_bind(r, uri_.c_str()));
         zmq_pollitem_t items[] = { { r, 0, ZMQ_POLLIN, 0 } };
         int reqid = -1;
-        ByteArray args(0x10000); ///@todo configurable buffer size
+        ByteArray args(bufferSize); ///@todo configurable buffer size
         ByteArray rep;
         std::vector< char > id(10, char(0));
         status_ = STARTED;
         while(status_ != STOPPED) {
-            ZCheck(zmq_poll(items, 1, 20)); //poll with 20ms timeout
+            ZCheck(zmq_poll(items, 1, timeoutms)); //poll with 20ms timeout
             if(items[0].revents & ZMQ_POLLIN) {
                 const int irc = ZCheck(zmq_recv(r, &id[0], id.size(), 0));
                 ZCheck(zmq_recv(r, 0, 0, 0));
@@ -276,16 +276,17 @@ public:
     ~ServiceManager() {
         Stop();
     }
-    void Start(const char* URI) {
+    void Start(const char* URI, size_t bufferSize = 0x100000,
+               int timeoutms = 2) {
         stop_ = false;
         void* ctx = ZCheck(zmq_ctx_new());
         void* r = ZCheck(zmq_socket(ctx, ZMQ_ROUTER));
         ZCheck(zmq_bind(r, URI));
         zmq_pollitem_t items[] = { { r, 0, ZMQ_POLLIN, 0 } };
         std::vector< char > id(10, char(0));
-        ByteArray buffer(0x10000);
+        ByteArray buffer(bufferSize);
         while(!stop_) {
-            ZCheck(zmq_poll(items, 1, 100)); //poll with 100ms timeout
+            ZCheck(zmq_poll(items, 1, timeoutms)); //poll with 100ms timeout
             if(items[0].revents & ZMQ_POLLIN) {
                 const int irc = ZCheck(zmq_recv(r, &id[0], id.size(), 0));
                 ZCheck(zmq_recv(r, 0, 0, 0));
