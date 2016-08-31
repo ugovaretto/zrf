@@ -15,3 +15,5 @@ add_executable(async-client-server-test-tcp
 add_executable(handshake-test src/test/TestHandShake.cpp)
 add_executable(peer-name-test src/test/peernametest.cpp)
 add_executable(push-pull-test src/test/PushPullTest.cpp)
+
+add_subdirectory(dep/syncqueue)
