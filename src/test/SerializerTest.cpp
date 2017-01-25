@@ -108,7 +108,7 @@ int main(int, char**) {
 
     //map
     map< string, string > mapin = {
-        {"one", "one"},
+        {"one", "eno"},
         {"two", "owt"},
         {"three", "eerht"}
     };
